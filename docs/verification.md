@@ -101,9 +101,21 @@ local inference has not been benchmarked. Mock API tests establish request/respo
 model availability, account access, solving accuracy, latency or real charges.
 The example is intentionally predefined and makes no accuracy claim.
 
-GitHub CI is configured but has not been run remotely. Native macOS/Linux UI and
+GitHub Actions passed all four Windows/Linux and Python 3.11/3.13 jobs on the
+[first public revision](https://github.com/vkmest/connections-studio/actions/runs/41146397592).
+Native macOS/Linux UI and
 clipboard use have not been manually tested here. No bundled executable installer
 has been built; desktop launch uses the documented Python environment.
+
+## Public release checks
+
+On October 31, 2026, Gitleaks 8.30.1 reported no credential detections in the
+published Git history or tracked release files. A fresh public clone was checked
+for excluded `.env`/environment folders and noreply-only commit identities. The
+wheel and source archive were checked for private files; the source package uses
+an explicit public-file allowlist. Documentation images use offline demo data and
+empty key fields. Scanning is evidence of these checks, not a guarantee that every
+possible secret format could be detected. OS credential stores were not read.
 
 ## First live check
 

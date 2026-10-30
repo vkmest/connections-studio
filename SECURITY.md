@@ -29,6 +29,8 @@ raw API traces or screenshots showing credentials to commits or issues. Document
 screenshots use the original offline demo and empty key fields. Crop personal game
 screenshots before sharing. An ignored file can still be force-added to Git, so
 review staged files and scan history before pushing.
+Git commit metadata can also expose an email address. Use your GitHub noreply
+identity for public commits and review metadata before publishing additional branches.
 
 If a key leaks, revoke it with its provider and create a replacement. Removing it
 from the latest commit alone does not remove it from Git history or invalidate it.
