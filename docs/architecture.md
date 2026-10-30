@@ -23,6 +23,7 @@ flowchart LR
 | `preferences.py` | Provider/model preferences only; never serializes keys |
 | `images.py` | Decode, orient, flatten, resize and strip image metadata |
 | `service.py` | OpenAI Responses, Kimi/DeepSeek chat, local Ollama, validation, cache and usage |
+| `structured_output.py` | Concrete JSON examples and conservative JSON-mode parsing |
 | `cli.py` | Arguments, text/JSON, exit codes and desktop dispatch |
 | `demo.py` | Original offline sample, independent of live API behavior |
 | `gui/window.py` | Workflow, puzzle state, feedback and worker lifecycle |
@@ -82,8 +83,11 @@ Local context increases to output allowance plus 4,096 tokens (20,096 total).
 Token-budget errors explicitly distinguish exhaustion from a network timeout.
 
 Kimi and DeepSeek use official Chat Completions APIs with JSON mode, a schema in
-the prompt and the same local validation. Kimi uses low/high reasoning; DeepSeek
+the prompt, an exact-count output example and the same local validation. Kimi uses low/high reasoning; DeepSeek
 disables/enables thinking. Unknown provider costs remain unavailable.
+Only a whole Markdown JSON fence is unwrapped; no prose/reasoning is searched for
+an answer and no missing fields/words are fabricated. Blank, malformed and schema-
+mismatched answers receive separate errors with usage preserved. They are not retried.
 
 Ollama uses its native `/api/chat` JSON schema format. Before sending puzzle data,
 `/api/show` must describe a local GGUF model without remote metadata; image requests

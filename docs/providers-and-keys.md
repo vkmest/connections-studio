@@ -164,6 +164,15 @@ Check the provider's usage dashboard. Cloud inputs are subject to that provider'
 data policies. OpenAI requests use `store=False`, which itself is not a
 zero-retention guarantee. [OpenAI data controls](https://developers.openai.com/api/docs/guides/your-data).
 
+DeepSeek JSON mode can return a blank/space-only final answer even when its finish
+status says stop. The app provides both schema and concrete examples as recommended
+by [DeepSeek's JSON guide](https://api-docs.deepseek.com/guides/json_mode/).
+Errors distinguish that case from malformed JSON and readable JSON that fails the
+required answer format. A complete surrounding JSON code fence is safely removed;
+missing fields, invented words or incorrect groups are still rejected. There is
+no automatic paid formatting retry. Error messages omit raw responses, which are
+not logged by the app.
+
 ## Terminal setup and use
 
 Install the project as described in the README. These examples assume an

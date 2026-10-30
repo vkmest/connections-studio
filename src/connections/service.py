@@ -22,6 +22,11 @@ from connections.config import MODEL_RATES, Settings
 from connections.images import PreparedImage
 from connections.models import Extraction, Group, Solution, SolveRequest, StrictModel, Usage
 from connections.providers import PROVIDERS
+from connections.structured_output import (
+    OutputFormatError,
+    json_format_instructions,
+    parse_json_answer,
+)
 
 T = TypeVar("T", bound=BaseModel)
 
@@ -344,8 +349,7 @@ class SolverService:
             messages=[
                 {
                     "role": "system",
-                    "content": instructions + "\nReturn only JSON matching "
-                    "this schema: " + json.dumps(schema.model_json_schema()),
+                    "content": instructions + json_format_instructions(schema),
                 },
                 {"role": "user", "content": content},
             ],
@@ -368,10 +372,10 @@ class SolverService:
         if choice.finish_reason != "stop" or choice.message.refusal:
             raise ServiceError("The provider declined or did not finish the answer.", usage)
         try:
-            value = schema.model_validate_json(choice.message.content or "")
-        except ValueError:
+            value = parse_json_answer(schema, choice.message.content)
+        except OutputFormatError as error:
             raise ServiceError(
-                "The provider did not return valid JSON for this puzzle.", usage
+                str(error) + " No automatic retry was made. This request may be billed.", usage
             ) from None
         return OperationResult(value, usage)
 

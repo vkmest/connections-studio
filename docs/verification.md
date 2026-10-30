@@ -4,7 +4,7 @@ Verified locally on Windows, Python 3.13.2, October 30, 2026.
 
 ## Automated checks
 
-- **82 tests pass**: board normalization, duplicate/blank rejection, full partition
+- **91 tests pass**: board normalization, duplicate/blank rejection, full partition
   integrity, locks/rejected sets, safe image handling, service caching/costs,
   typed output via the real SDK, API error/refusal/incomplete responses, explicit
   reasoning/token settings, CLI output and desktop state/lifecycle. Provider tests
@@ -25,6 +25,10 @@ Verified locally on Windows, Python 3.13.2, October 30, 2026.
   renamed/reordered previous partitions, allowance for partial group reuse when
   others change, retention of failed candidates, history reset, cross-board
   rejection and no network request for an impossible final-four rearrangement.
+  JSON-mode regressions cover blank/malformed/schema-invalid responses with usage
+  preserved and no retries, whole code-fence unwrapping without bypassing puzzle
+  validation, examples valid for extraction/full/remaining schemas, and refusal
+  to search surrounding prose for embedded JSON.
 - Ruff lint and format checks pass.
 - Wheel and source distribution build successfully. Their contents were checked
   for required source and absence of `.env` / virtual environments.

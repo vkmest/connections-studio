@@ -143,3 +143,72 @@ def test_extended_local_budget_has_enough_context_and_longer_request_timeout():
     body = json.loads(requests[-1].content)
     assert body["options"] == {"num_ctx": 20096, "num_predict": 16000}
     assert all(request.extensions["timeout"]["read"] == 300 for request in requests)
+
+
+def chat_service(content):
+    requests = []
+
+    def handle(request):
+        requests.append(request)
+        return httpx.Response(
+            200,
+            json={
+                "id": "chat_format",
+                "object": "chat.completion",
+                "created": 0,
+                "model": "deepseek-flash",
+                "choices": [
+                    {
+                        "index": 0,
+                        "finish_reason": "stop",
+                        "message": {"role": "assistant", "content": content},
+                    }
+                ],
+                "usage": {"prompt_tokens": 100, "completion_tokens": 200, "total_tokens": 300},
+            },
+        )
+
+    client = OpenAI(
+        api_key="dummy-only",
+        base_url="https://api.deepseek.com",
+        max_retries=0,
+        http_client=httpx.Client(transport=httpx.MockTransport(handle)),
+    )
+    return SolverService(
+        Settings(provider="deepseek", api_key="dummy-only"), client=client
+    ), requests
+
+
+@pytest.mark.parametrize(
+    "content,message",
+    [
+        ("   \n  ", "blank final answer"),
+        ("not json sensitive-response-marker", "malformed JSON"),
+        ('{"categories": []}', "JSON was readable"),
+    ],
+)
+def test_chat_format_failures_are_specific_safe_and_never_retried(content, message):
+    service, requests = chat_service(content)
+    with pytest.raises(ServiceError, match=message) as error:
+        service.solve(SolveRequest(words=WORDS))
+    assert "sensitive-response-marker" not in str(error.value)
+    assert error.value.usage.output_tokens == 200
+    assert len(requests) == 1
+
+
+def test_markdown_fenced_json_is_unwrapped_but_still_validated():
+    payload = {"groups": [group.model_dump() for group in groups()]}
+    service, requests = chat_service("```json\n" + json.dumps(payload) + "\n```")
+    result = service.solve(SolveRequest(words=WORDS))
+    assert result.value.groups == groups()
+    prompt = json.loads(requests[0].content)["messages"][0]["content"]
+    assert "Example JSON" in prompt
+    assert '"confidence"' in prompt
+
+
+def test_fenced_json_does_not_bypass_puzzle_validation():
+    payload = {"groups": [group.model_dump() for group in groups()]}
+    payload["groups"][0]["words"][0] = "INVENTED"
+    service, _ = chat_service("```json\n" + json.dumps(payload) + "\n```")
+    with pytest.raises(ServiceError, match="exactly once"):
+        service.solve(SolveRequest(words=WORDS))
