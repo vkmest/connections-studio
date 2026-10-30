@@ -46,6 +46,8 @@ def test_paste_image_previews_without_api_call(qtbot):
     assert not widget.busy
     assert widget.solution is None
     assert widget.extract_button.isEnabled()
+    assert widget.capture_prompt.isVisible()
+    assert widget.capture_prompt.read_button.isDefault()
 
 
 def test_paste_words_preserves_phrases(qtbot):
@@ -95,6 +97,7 @@ def test_background_success_displays_solution(qtbot, monkeypatch):
     qtbot.waitUntil(lambda: not widget.busy, timeout=5000)
     assert len(widget.solution.groups) == 4
     assert widget.session_cost == 0.001
+    assert not widget.busy_dialog.isVisible()
 
 
 def test_bulk_paste_never_silently_truncates_entries(qtbot):
@@ -242,6 +245,89 @@ def test_extended_style_is_explicit_and_warns_about_cost(qtbot):
     assert widget.mode.currentData() == "extended"
     assert "16,000" in widget.board_note.text()
     assert "cost" in widget.board_note.text().lower()
+
+
+def test_sidebar_can_be_closed_and_reopened_without_losing_puzzle(qtbot):
+    widget = window(qtbot)
+    widget.set_words(DEMO_WORDS)
+    assert widget.mode.currentData() == "extended"
+    widget.sidebar_close.click()
+    assert widget.sidebar.isHidden()
+    widget.sidebar_toggle.click()
+    assert not widget.sidebar.isHidden()
+    assert widget.word_inputs[0].text() == DEMO_WORDS[0]
+
+
+def test_theme_switch_is_saved_and_survives_provider_preferences(qtbot):
+    from connections.preferences import save_preferences
+
+    widget = window(qtbot)
+    widget.theme_toggle.click()
+    assert widget.theme == "dark"
+    save_preferences(Settings(api_key="never-save-this"))
+    other = window(qtbot)
+    assert other.theme == "dark"
+    other.theme_toggle.click()
+    assert other.theme == "light"
+
+
+def test_capture_popup_requires_explicit_read_and_busy_dialog_is_centered(qtbot, monkeypatch):
+    from threading import Event
+
+    release = Event()
+    widget = window(qtbot)
+    calls = []
+
+    def extract(image):
+        calls.append(image)
+        release.wait(timeout=3)
+        raise ServiceError("Test read failure")
+
+    monkeypatch.setattr(widget.service, "extract", extract)
+    image = QImage(300, 300, QImage.Format.Format_RGB32)
+    image.fill(Qt.GlobalColor.white)
+    QApplication.clipboard().setImage(image)
+    widget.paste_clipboard()
+    assert not calls and not widget.busy
+    widget.capture_prompt.read_button.click()
+    try:
+        assert not widget.capture_prompt.isVisible()
+        assert widget.busy_dialog.isVisible()
+        center = widget.mapToGlobal(widget.rect().center())
+        assert (widget.busy_dialog.geometry().center() - center).manhattanLength() <= 3
+        assert not widget.message_label.isVisible()
+        widget.busy_dialog.reject()
+        assert widget.busy_dialog.isVisible()
+    finally:
+        release.set()
+        qtbot.waitUntil(lambda: not widget.busy, timeout=5000)
+    assert len(calls) == 1
+    assert not widget.busy_dialog.isVisible()
+    assert "Test read failure" in widget.message_label.text()
+
+
+def test_completed_puzzle_has_new_puzzle_action_that_returns_home(qtbot, monkeypatch):
+    from PySide6.QtWidgets import QMessageBox
+
+    def unexpected_question(*args):
+        raise AssertionError("Completed puzzle should reset directly")
+
+    monkeypatch.setattr(QMessageBox, "question", unexpected_question)
+    widget = window(qtbot)
+    widget.load_demo()
+    widget.start_solve()
+    for index in range(4):
+        widget.toggle_lock(index, True)
+    assert widget.retry_button.text() == "New puzzle  →"
+    assert widget.retry_button.isEnabled()
+    assert "No API request" in widget.retry_button.toolTip()
+    assert widget.new_button.isHidden()
+    widget.retry_button.click()
+    assert widget.pages.currentIndex() == 0
+    assert widget.solution is None and not widget.locked and not widget.attempt_history
+    assert all(not field.text() for field in widget.word_inputs)
+    assert widget.prepared_image is None
+    assert not widget.new_button.isHidden()
 
 
 def test_rethink_includes_history_and_remembers_refused_attempts(qtbot, monkeypatch):

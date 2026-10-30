@@ -1,10 +1,10 @@
 # Verification record
 
-Verified locally on Windows, Python 3.13.2, October 30, 2026.
+Verified locally on Windows, Python 3.13.2, October 31, 2026.
 
 ## Automated checks
 
-- **100 tests pass**: board normalization, duplicate/blank rejection, full partition
+- **108 tests pass**: board normalization, duplicate/blank rejection, full partition
   integrity, locks/rejected sets, safe image handling, service caching/costs,
   typed output via the real SDK, API error/refusal/incomplete responses, explicit
   reasoning/token settings, CLI output and desktop state/lifecycle. Provider tests
@@ -36,6 +36,10 @@ Verified locally on Windows, Python 3.13.2, October 30, 2026.
   quality or the accuracy of a live model's ranking.
   Long-tile regression verifies options reference word indexes rather than
   repeating full tile text in every candidate, bounding the local prompt size.
+  Desktop regressions cover collapsible navigation, explicit screenshot-read
+  popup, centered loading and failure recovery, Extended desktop default, theme
+  persistence independent of provider settings, safe appearance defaults and
+  completed-puzzle reset directly from the results action.
 - Ruff lint and format checks pass.
 - Wheel and source distribution build successfully. Their contents were checked
   for required source and absence of `.env` / virtual environments.
@@ -51,6 +55,9 @@ Verified locally on Windows, Python 3.13.2, October 30, 2026.
 
 - Rendered actual Qt widgets at 1320×900 and 1060×740, including empty workspace,
   word review, results and settings. Inspected saved screenshots in `docs/images`.
+- Inspected light/dark workspace, result cards and Settings, collapsed navigation,
+  all-confirmed New puzzle action, and both centered popup designs. The rendering
+  script uses dummy credentials and offline demo data; it makes no API calls.
 - Opened the real Windows app and clicked Reveal example groups, verifying the
   native window transitions to all four category cards and feedback controls.
 - Image clipboard paste is exercised against the real QApplication clipboard in

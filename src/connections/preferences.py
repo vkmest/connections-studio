@@ -33,3 +33,31 @@ def save_preferences(settings, *, path: Path | None = None) -> None:
     temporary = target.with_suffix(".tmp")
     temporary.write_text(json.dumps(data, indent=2), encoding="utf-8")
     temporary.replace(target)
+
+
+def load_appearance() -> dict:
+    defaults = {"theme": "light", "sidebar_collapsed": False}
+    try:
+        data = json.loads(
+            preference_path().with_name("appearance.json").read_text(encoding="utf-8")
+        )
+        if isinstance(data, dict):
+            if isinstance(data.get("theme"), str) and data["theme"] in {"light", "dark"}:
+                defaults["theme"] = data["theme"]
+            if isinstance(data.get("sidebar_collapsed"), bool):
+                defaults["sidebar_collapsed"] = data["sidebar_collapsed"]
+    except (OSError, ValueError):
+        pass
+    return defaults
+
+
+def save_appearance(theme: str, sidebar_collapsed: bool) -> None:
+    if theme not in {"light", "dark"}:
+        raise ValueError("Choose light or dark appearance.")
+    target = preference_path().with_name("appearance.json")
+    target.parent.mkdir(parents=True, exist_ok=True)
+    temporary = target.with_suffix(".tmp")
+    temporary.write_text(
+        json.dumps({"theme": theme, "sidebar_collapsed": sidebar_collapsed}), encoding="utf-8"
+    )
+    temporary.replace(target)

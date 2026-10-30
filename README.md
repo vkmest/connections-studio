@@ -23,6 +23,7 @@ Tesseract setup required.
 - **Try it free:** the offline example needs neither a key nor a connection.
 - **Choose your provider:** OpenAI, Kimi, DeepSeek, or free local inference with Ollama.
 - **Keep keys local:** session-only by default, with optional OS credential storage.
+- **Make it yours:** light/dark themes and a collapsible sidebar; appearance is saved locally.
 - **Use your terminal:** image path, clipboard, text file, direct words or JSON output.
 
 ![Suggested groups in the offline example](docs/images/connections.png)
@@ -121,8 +122,9 @@ Official references: [API quickstart](https://developers.openai.com/api/docs/qui
 2. On Windows, press **Win+Shift+S** and select just the grid. On macOS, use
    **Control+Command+Shift+4** to capture a region to the clipboard.
 3. Press **Ctrl+V / Cmd+V** in Connections Studio or click Paste screenshot.
-   The preview is local. **Pasting alone makes no API call.**
-4. Click **Read words from image**. This sends the preview to your selected provider
+   A centered **Screenshot ready** popup offers the next step. The preview is local.
+   **Pasting alone makes no API call.** Choose Not now to dismiss it.
+4. Click **Read words from image** in the popup or capture panel. This sends the preview to your selected provider
    (or local Ollama). Cloud providers use API credits.
 5. Check all 16 words and correct any misread tile. Click **Find connections** for
    a separate, text-only solve request.
@@ -130,6 +132,12 @@ Official references: [API quickstart](https://developers.openai.com/api/docs/qui
    **Not correct**, then **Rethink remaining**. Confirmed groups are kept locally;
    only unresolved words are sent for another solve. Rejected sets
    cannot recur under a different title.
+
+Loading appears in a centered popup while the model works. After all four groups
+are confirmed, **New puzzle →** replaces Rethink beside the results and returns
+directly to an empty home screen. The sidebar's New puzzle action is hidden in
+that completed state. Use the top-left menu button to reopen a closed sidebar;
+the top-right Light mode/Dark mode button switches appearance.
 
 Rethink resets the feedback button selections and removes old unresolved cards.
 Confirmed groups remain labeled as kept; rejection history remains active. If the
@@ -198,6 +206,8 @@ Rates and account availability can change.
 | Extended solve | Medium | 16,000 |
 
 Extended uses a five-minute request timeout instead of the standard 90 seconds.
+The desktop starts in **Extended** by default. Select Budget or Deeper to reduce
+the allowance; terminal commands retain Budget as their default.
 Choose it explicitly under Solving style or pass `--mode extended`. It raises the
 allowance, not the price per token, but can cost more if the model uses more tokens.
 At the reference GPT-5.4 mini rate, 16,000 output tokens alone cost up to $0.072,

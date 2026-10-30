@@ -1,7 +1,12 @@
 """A small, local design system; no downloaded fonts or assets."""
 
+import re
+
+from PySide6.QtGui import QColor, QPalette
+
 COLORS = ["#F3D983", "#C5D9A3", "#AECBE5", "#D4BCE8"]
 SOFT_COLORS = ["#FFFAE9", "#F3F8EA", "#F0F6FC", "#F8F1FC"]
+DARK_GROUP_COLORS = ["#302B1D", "#233025", "#202D3E", "#30253E"]
 
 STYLE = """
 QWidget { color: #24283A; font-family: 'Segoe UI', 'Helvetica Neue', sans-serif;
@@ -54,6 +59,9 @@ QPushButton#FeedbackCorrect:disabled, QPushButton#FeedbackIncorrect:disabled {
     background: #F0F1EB; color: #92988D; border-color: #DEE2D7;
 }
 QLabel#ConfirmedStatus { color: #27643A; font-weight: 700; font-size: 12px; }
+QLabel#GroupWords { font-size:13px; font-weight:700; color:#363D39; }
+QLabel#GroupExplanation { color:#62695F; font-size:12px; }
+QLabel#SidebarQuote { font-family:Georgia; font-size:21px; color:#777E6E; }
 QLineEdit { border: 1px solid #DDE0D7; background: #FCFCF9; border-radius: 10px;
             padding: 10px; selection-background-color: #6950A1; }
 QLineEdit:focus { border: 2px solid #9277BC; background: #FFFFFF; }
@@ -66,6 +74,7 @@ QComboBox::drop-down { border: none; width: 24px; }
 QComboBox QAbstractItemView { background: white; selection-background-color: #E4DDEF;
                             selection-color: #302241; padding: 6px; }
 QDialog { background: #F7F7F2; }
+QDialog#CenteredDialog { border: 2px solid #DDD4EE; border-radius: 16px; }
 QCheckBox { spacing: 8px; }
 QCheckBox::indicator { width: 14px; height: 14px; border-radius: 3px;
                        border: 1px solid #AAA99F; background: white; }
@@ -79,3 +88,99 @@ QScrollBar::handle:vertical { background: #CBCDCA; border-radius: 3px; min-heigh
 QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
 QToolTip { background: #303444; color: white; padding: 8px; border: none; }
 """
+
+# Semantic equivalents preserve contrast while sharing layout and typography.
+DARK_COLORS = {
+    "#24283A": "#E5EAF3",
+    "#F7F7F2": "#141A24",
+    "#EFEFE8": "#101620",
+    "#DDDFD5": "#303A49",
+    "#707568": "#A0ACBE",
+    "#74796F": "#A7B2C4",
+    "#292D39": "#F0F3FA",
+    "#767B72": "#A9B4C5",
+    "#E8ECDF": "#24382C",
+    "#4E6353": "#B6D8BE",
+    "#EDE9F8": "#29243E",
+    "#DDD4EE": "#514469",
+    "#51416D": "#D9C9F5",
+    "#FFFFFF": "#1C2431",
+    "#E1E4D9": "#344052",
+    "#EAF0E8": "#203029",
+    "#DDDFD6": "#3D485A",
+    "#F1F0F7": "#303449",
+    "#B5A9D1": "#9C84C7",
+    "#E3DCEE": "#3E3453",
+    "#9A9D95": "#8390A4",
+    "#F0F1EB": "#232B37",
+    "#E3E5DC": "#303B4D",
+    "#6950A1": "#8464BD",
+    "#59418E": "#9775D0",
+    "#493475": "#6C4D9D",
+    "#E6E1ED": "#353044",
+    "#9C91AE": "#9C90AE",
+    "#6D6087": "#BDA5DF",
+    "#E8E3EF": "#332D43",
+    "#7B7F74": "#A8B4C7",
+    "#E0DCE9": "#332D47",
+    "#59417E": "#D2B8F5",
+    "#E5E6DC": "#263041",
+    "#303848": "#4A3C60",
+    "#F2FAF3": "#1F3428",
+    "#27643A": "#88D9A0",
+    "#8CB69A": "#427552",
+    "#DDEFE1": "#294C36",
+    "#FFF5F3": "#3C2629",
+    "#9A3732": "#F1A29D",
+    "#D9A19A": "#935550",
+    "#F9DFDA": "#543034",
+    "#A43D36": "#9A403C",
+    "#DEE2D7": "#354051",
+    "#92988D": "#93A0B3",
+    "#DDE0D7": "#384557",
+    "#FCFCF9": "#18212D",
+    "#9277BC": "#BA9AE5",
+    "#F3F4EE": "#222D3C",
+    "#E7E9E0": "#364256",
+    "#FAF7FF": "#2E2940",
+    "#E4DDEF": "#443555",
+    "#302241": "#F0E7FC",
+    "#AAA99F": "#718096",
+    "#D7CDE9": "#624E7E",
+    "#E9EAE4": "#293442",
+    "#D4D6CE": "#3B495A",
+    "#E9E6EF": "#343044",
+    "#8E78B7": "#B99BDD",
+    "#CBCDCA": "#536079",
+    "#303444": "#283349",
+    "#363D39": "#E4EAF3",
+    "#62695F": "#B3BECD",
+    "#777E6E": "#9CAAC0",
+}
+
+
+def style_for(theme: str) -> str:
+    if theme != "dark":
+        return STYLE
+    style = re.sub(r"#[0-9A-Fa-f]{6}", lambda match: DARK_COLORS.get(match[0], match[0]), STYLE)
+    style = style.replace("background: white", "background: #1C2431")
+    # Selected success retains a dark green fill and a white label.
+    return style + "\nQPushButton#FeedbackCorrect:checked { background:#286241; color:white; }"
+
+
+def palette_for(theme: str) -> QPalette:
+    palette = QPalette()
+    if theme == "dark":
+        for role, color in (
+            (QPalette.ColorRole.Window, "#141A24"),
+            (QPalette.ColorRole.Base, "#1C2431"),
+            (QPalette.ColorRole.WindowText, "#E5EAF3"),
+            (QPalette.ColorRole.Text, "#E5EAF3"),
+            (QPalette.ColorRole.Button, "#222D3C"),
+            (QPalette.ColorRole.ButtonText, "#E5EAF3"),
+            (QPalette.ColorRole.Highlight, "#8464BD"),
+            (QPalette.ColorRole.HighlightedText, "#FFFFFF"),
+            (QPalette.ColorRole.PlaceholderText, "#8F9CAF"),
+        ):
+            palette.setColor(role, QColor(color))
+    return palette

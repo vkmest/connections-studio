@@ -11,7 +11,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from connections.gui.theme import COLORS, SOFT_COLORS
+from connections.gui.theme import COLORS, DARK_GROUP_COLORS, SOFT_COLORS
 from connections.models import Group
 
 
@@ -54,6 +54,7 @@ class CapturePreview(QWidget):
         super().__init__()
         self.setMinimumHeight(238)
         self.pixmap = QPixmap()
+        self.theme = "light"
         self.setAccessibleName("Screenshot preview")
 
     def set_image(self, data: bytes | None):
@@ -66,8 +67,9 @@ class CapturePreview(QWidget):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         box = QRectF(self.rect()).adjusted(1, 1, -1, -1)
-        painter.setBrush(QColor("#F7F7F2"))
-        painter.setPen(QPen(QColor("#D5DACC"), 1, Qt.PenStyle.DashLine))
+        dark = self.theme == "dark"
+        painter.setBrush(QColor("#18212D" if dark else "#F7F7F2"))
+        painter.setPen(QPen(QColor("#435166" if dark else "#D5DACC"), 1, Qt.PenStyle.DashLine))
         painter.drawRoundedRect(box, 13, 13)
         if not self.pixmap.isNull():
             scaled = self.pixmap.scaled(
@@ -87,9 +89,19 @@ class CapturePreview(QWidget):
         for row in range(4):
             for col in range(4):
                 tile = QRectF(-132 + col * 67, -89 + row * 45, 61, 39)
-                painter.setBrush(QColor(COLORS[row] if row == 1 else "#E8EAE1"))
+                painter.setBrush(
+                    QColor(COLORS[row] if row == 1 else "#2C384A" if dark else "#E8EAE1")
+                )
                 painter.drawRoundedRect(tile, 6, 6)
-                painter.setPen(QColor("#454D43" if row < 2 else "#A8AEA1"))
+                painter.setPen(
+                    QColor(
+                        "#454D43"
+                        if row == 1 or (not dark and row < 2)
+                        else "#C5CFDE"
+                        if dark
+                        else "#A8AEA1"
+                    )
+                )
                 painter.drawText(
                     tile, Qt.AlignmentFlag.AlignCenter, words[row * 4 + col] if row < 2 else "·"
                 )
@@ -101,12 +113,20 @@ class GroupCard(QFrame):
     reject_changed = Signal(int)
 
     def __init__(
-        self, group: Group, index: int, locked: bool, rejected: bool, *, submitted: bool = False
+        self,
+        group: Group,
+        index: int,
+        locked: bool,
+        rejected: bool,
+        *,
+        submitted: bool = False,
+        theme: str = "light",
     ):
         super().__init__()
         self.setObjectName("GroupCard")
+        backgrounds = DARK_GROUP_COLORS if theme == "dark" else SOFT_COLORS
         self.setStyleSheet(
-            f"QFrame#GroupCard {{background:{SOFT_COLORS[index]};"
+            f"QFrame#GroupCard {{background:{backgrounds[index]};"
             f"border:1px solid {COLORS[index]};border-radius:16px;}}"
         )
         layout = QVBoxLayout(self)
@@ -114,19 +134,17 @@ class GroupCard(QFrame):
         layout.setSpacing(10)
         top = QHBoxLayout()
         number = label(f"0{index + 1}  /  SUGGESTED GROUP", "Eyebrow")
-        number.setStyleSheet("font-size:10px;letter-spacing:1.3px;color:#666D60;")
+        number.setStyleSheet("font-size:10px;letter-spacing:1.3px;")
         top.addWidget(number)
         top.addStretch()
         top.addWidget(label(group.confidence.capitalize() + " confidence", "Muted"))
         layout.addLayout(top)
         title = label(group.title, "CardTitle", wrap=True)
         layout.addWidget(title)
-        words = label("   ·   ".join(group.words), wrap=True)
-        words.setStyleSheet("font-size:13px;font-weight:700;color:#363D39;")
+        words = label("   ·   ".join(group.words), "GroupWords", wrap=True)
         words.setMinimumHeight(32)
         layout.addWidget(words)
-        explanation = label(group.explanation, "Subtitle", wrap=True)
-        explanation.setStyleSheet("color:#62695F;font-size:12px;")
+        explanation = label(group.explanation, "GroupExplanation", wrap=True)
         layout.addWidget(explanation)
         layout.addStretch()
         if submitted and locked:

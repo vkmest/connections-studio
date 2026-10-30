@@ -16,7 +16,6 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QMainWindow,
     QMessageBox,
-    QProgressBar,
     QScrollArea,
     QStackedWidget,
     QVBoxLayout,
@@ -26,8 +25,9 @@ from PySide6.QtWidgets import (
 from connections.cli import parse_word_text
 from connections.config import Settings
 from connections.demo import DEMO_WORDS, demo_solution
+from connections.gui.dialogs import BusyDialog, CapturePrompt
 from connections.gui.settings_dialog import SettingsDialog
-from connections.gui.theme import STYLE
+from connections.gui.theme import palette_for, style_for
 from connections.gui.widgets import (
     CapturePreview,
     GridMark,
@@ -38,6 +38,7 @@ from connections.gui.widgets import (
 from connections.gui.worker import Worker
 from connections.images import PreparedImage, prepare_image, read_image
 from connections.models import Group, Solution, SolveRequest, validate_words
+from connections.preferences import load_appearance, save_appearance
 from connections.providers import PROVIDERS
 from connections.service import OperationResult, SolverService
 
@@ -59,6 +60,8 @@ class MainWindow(QMainWindow):
                 )
             service = SolverService(settings)
         self.service = service
+        appearance = load_appearance()
+        self.theme = appearance["theme"]
         self.prepared_image: PreparedImage | None = None
         self.solution: Solution | None = None
         self.locked: list[Group] = []
@@ -76,9 +79,13 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("Connections Studio")
         self.resize(1320, 900)
         self.setMinimumSize(1060, 740)
-        self.setStyleSheet(STYLE)
         self.setAcceptDrops(True)
         self._build()
+        self.capture_prompt = CapturePrompt(self)
+        self.capture_prompt.read_requested.connect(self.start_extract)
+        self.busy_dialog = BusyDialog(self)
+        self.apply_theme(self.theme, persist=False)
+        self.set_sidebar_collapsed(appearance["sidebar_collapsed"], persist=False)
         self.mode.currentIndexChanged.connect(self._refresh)
         self._refresh()
         if configuration_error:
@@ -94,24 +101,26 @@ class MainWindow(QMainWindow):
         outer = QHBoxLayout(root)
         outer.setContentsMargins(0, 0, 0, 0)
         outer.setSpacing(0)
-        outer.addWidget(self._sidebar())
+        self.sidebar = self._sidebar()
+        outer.addWidget(self.sidebar)
         right = QWidget()
         layout = QVBoxLayout(right)
         layout.setContentsMargins(32, 22, 32, 18)
         layout.setSpacing(14)
         top = QHBoxLayout()
+        self.sidebar_toggle = button("☰", "Ghost", self.toggle_sidebar)
+        self.sidebar_toggle.setAccessibleName("Toggle sidebar")
+        top.addWidget(self.sidebar_toggle)
         top.addWidget(label("YOUR DAILY DOSE OF AHA.", "Eyebrow"))
         top.addStretch()
         self.key_status = label("", "Pill")
         top.addWidget(self.key_status)
+        self.theme_toggle = button("Dark mode", "Ghost", self.toggle_theme)
+        self.theme_toggle.setAccessibleName("Switch light or dark theme")
+        top.addWidget(self.theme_toggle)
         self.settings_button = button("Settings", "Ghost", self.open_settings)
         top.addWidget(self.settings_button)
         layout.addLayout(top)
-        self.progress = QProgressBar()
-        self.progress.setRange(0, 0)
-        self.progress.setTextVisible(False)
-        self.progress.hide()
-        layout.addWidget(self.progress)
         self.message_label = label("", "Message", wrap=True)
         self.message_label.setAccessibleName("Status message")
         self.message_label.hide()
@@ -141,7 +150,16 @@ class MainWindow(QMainWindow):
         layout = QVBoxLayout(panel)
         layout.setContentsMargins(22, 32, 22, 22)
         layout.setSpacing(8)
-        layout.addWidget(GridMark(38))
+        brand = QHBoxLayout()
+        brand.addWidget(GridMark(38))
+        brand.addStretch()
+        self.sidebar_close = button("‹", "Ghost", self.toggle_sidebar)
+        self.sidebar_close.setAccessibleName("Close sidebar")
+        self.sidebar_close.setToolTip("Close sidebar")
+        self.sidebar_close.setFixedSize(32, 32)
+        self.sidebar_close.setStyleSheet("font-size:24px; padding:0px;")
+        brand.addWidget(self.sidebar_close)
+        layout.addLayout(brand)
         layout.addSpacing(13)
         layout.addWidget(label("connections", "Brand"))
         layout.addWidget(label("S T U D I O", "BrandSub"))
@@ -159,8 +177,7 @@ class MainWindow(QMainWindow):
         self.new_button = button("+   New puzzle", "Ghost", self.new_puzzle)
         layout.addWidget(self.new_button)
         layout.addStretch(1)
-        note = label("Sixteen words.\nFour little epiphanies.", wrap=True)
-        note.setStyleSheet("font-family:Georgia;font-size:21px;color:#777E6E;")
+        note = label("Sixteen words.\nFour little epiphanies.", "SidebarQuote", wrap=True)
         layout.addWidget(note)
         layout.addSpacing(14)
         self.demo_button = button("Try an example  ↗", "Ghost", self.load_demo)
@@ -201,7 +218,7 @@ class MainWindow(QMainWindow):
         left.addWidget(self.paste_button)
         self.open_button = button("or open an image", "Ghost", self.open_image)
         left.addWidget(self.open_button)
-        self.extract_button = button("Read words from image  →", "", self.start_extract)
+        self.extract_button = button("Read words from image  →", "Primary", self.start_extract)
         left.addWidget(self.extract_button)
         self.image_note = label(
             "Capture just the 4 × 4 grid. Nothing is sent until you click Read words.",
@@ -247,6 +264,7 @@ class MainWindow(QMainWindow):
         self.mode.addItem("Budget · everyday", "budget")
         self.mode.addItem("Deeper · tricky puzzles", "deeper")
         self.mode.addItem("Extended · more time/tokens", "extended")
+        self.mode.setCurrentIndex(self.mode.findData("extended"))
         self.mode.setAccessibleName("Solving style")
         self.mode.setToolTip(
             "Budget: 3,500 tokens. Deeper: 6,500. Extended: 16,000 and a five-minute "
@@ -306,7 +324,7 @@ class MainWindow(QMainWindow):
         bottom.addWidget(self.feedback_note, 1)
         self.clear_feedback = button("Clear feedback", "Ghost", self.reset_feedback)
         bottom.addWidget(self.clear_feedback)
-        self.retry_button = button("Rethink remaining  →", "Primary", self.start_solve)
+        self.retry_button = button("Rethink remaining  →", "Primary", self.results_action)
         bottom.addWidget(self.retry_button)
         layout.addLayout(bottom)
         layout.addWidget(
@@ -324,6 +342,55 @@ class MainWindow(QMainWindow):
     def _message(self, text: str):
         self.message_label.setText(text)
         self.message_label.setVisible(bool(text))
+
+    def _save_appearance(self):
+        try:
+            save_appearance(self.theme, self.sidebar.isHidden())
+        except OSError:
+            self._message("Appearance applied for this session, but could not be saved.")
+
+    def set_sidebar_collapsed(self, collapsed: bool, *, persist=True):
+        self.sidebar.setVisible(not collapsed)
+        self.sidebar_toggle.setToolTip("Open sidebar" if collapsed else "Close sidebar")
+        if persist:
+            self._save_appearance()
+
+    def toggle_sidebar(self):
+        self.set_sidebar_collapsed(not self.sidebar.isHidden())
+
+    def apply_theme(self, theme: str, *, persist=True):
+        self.theme = theme
+        self.setPalette(palette_for(theme))
+        self.setStyleSheet(style_for(theme))
+        self.preview.theme = theme
+        self.preview.update()
+        self.theme_toggle.setText("Light mode" if theme == "dark" else "Dark mode")
+        self._render_results()
+        if persist:
+            self._save_appearance()
+
+    def toggle_theme(self):
+        self.apply_theme("light" if self.theme == "dark" else "dark")
+
+    def results_action(self):
+        if len(self.locked) == 4:
+            self.new_puzzle()
+        else:
+            self.start_solve()
+
+    def moveEvent(self, event):
+        super().moveEvent(event)
+        self._center_popups()
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self._center_popups()
+
+    def _center_popups(self):
+        for name in ("capture_prompt", "busy_dialog"):
+            dialog = getattr(self, name, None)
+            if dialog is not None and dialog.isVisible():
+                dialog.recenter()
 
     def _refresh(self):
         words = [entry.text() for entry in self.word_inputs]
@@ -366,10 +433,12 @@ class MainWindow(QMainWindow):
         self.export_button.setEnabled(can_export)
         self.retry_button.setEnabled(
             self.solution is not None
-            and len(self.locked) < 4
             and not self.busy
-            and not self.demo_mode
+            and (len(self.locked) == 4 or not self.demo_mode)
         )
+        complete = len(self.locked) == 4
+        self.retry_button.setText("New puzzle  →" if complete else "Rethink remaining  →")
+        self.new_button.setVisible(not complete)
         self.clear_feedback.setEnabled(
             not self.busy and bool(self.locked or self.rejected or self.attempt_history)
         )
@@ -391,7 +460,11 @@ class MainWindow(QMainWindow):
         )
         self.extract_button.setToolTip(note)
         self.solve_button.setToolTip(note)
-        self.retry_button.setToolTip(note)
+        self.retry_button.setToolTip(
+            "Start a fresh puzzle and return to the home screen. No API request."
+            if complete
+            else note
+        )
         suffix = " + unpriced usage" if self.cost_incomplete else ""
         self.cost_label.setText(f"Session API estimate  ${self.session_cost:.4f}{suffix}")
         self.cost_label.setToolTip(
@@ -422,6 +495,7 @@ class MainWindow(QMainWindow):
         self._refresh()
 
     def set_words(self, words: list[str]):
+        self.capture_prompt.hide()
         self._invalidate()
         for index, entry in enumerate(self.word_inputs):
             entry.setText(words[index] if index < len(words) else "")
@@ -457,6 +531,18 @@ class MainWindow(QMainWindow):
                 buffer.open(QIODevice.OpenModeFlag.WriteOnly)
                 image.save(buffer, "PNG")
                 self.set_image(bytes(buffer.data()))
+                self.capture_prompt.note.setText(
+                    "Read the screenshot, then review and edit the tiles. "
+                    + (
+                        "Runs locally with Ollama."
+                        if self.service.settings.provider == "ollama"
+                        else "Sends the image to "
+                        f"{PROVIDERS[self.service.settings.provider].name}; "
+                        "cloud API charges apply."
+                    )
+                )
+                self.capture_prompt.show()
+                self.capture_prompt.read_button.setFocus()
             elif clipboard.text().strip():
                 words = parse_word_text(clipboard.text())
                 if len(words) != 16:
@@ -529,7 +615,9 @@ class MainWindow(QMainWindow):
     def new_puzzle(self):
         if self.busy:
             return
-        if any(entry.text() for entry in self.word_inputs) or self.prepared_image:
+        if len(self.locked) != 4 and (
+            any(entry.text() for entry in self.word_inputs) or self.prepared_image
+        ):
             answer = QMessageBox.question(
                 self,
                 "Start a new puzzle?",
@@ -552,6 +640,7 @@ class MainWindow(QMainWindow):
     def start_extract(self):
         if self.busy or self.prepared_image is None:
             return
+        self.capture_prompt.hide()
         self._run("extract", lambda: self.service.extract(self.prepared_image))
 
     def start_solve(self):
@@ -590,14 +679,20 @@ class MainWindow(QMainWindow):
     def _run(self, operation: str, callback):
         self.busy = True
         self._operation = operation
-        self.progress.show()
-        self._message(
+        status = (
             "Reading the grid… This can take a moment."
             if operation == "extract"
             else "Comparing every allowed split of the last eight words… "
             "Rejected and previous arrangements have been removed."
             if len(self.locked) == 2
             else "Looking for connections… Checking meanings and wordplay."
+        )
+        self._message("")
+        self.busy_dialog.status.setText(status)
+        self.busy_dialog.note.setText(
+            "Extended allows up to five minutes per request. Cloud usage may be billed."
+            if self.mode.currentData() == "extended" and operation == "solve"
+            else "Please keep the app open while your model responds."
         )
         self._refresh()
         self._set_cards_enabled(False)
@@ -611,6 +706,7 @@ class MainWindow(QMainWindow):
         self._worker.finished.connect(self._worker.deleteLater)
         self._thread.finished.connect(self._thread_finished)
         self._thread.finished.connect(self._thread.deleteLater)
+        self.busy_dialog.show()
         self._thread.start()
 
     def _add_usage(self, usage):
@@ -668,7 +764,7 @@ class MainWindow(QMainWindow):
         self.busy = False
         self._worker = None
         self._thread = None
-        self.progress.hide()
+        self.busy_dialog.hide()
         self._refresh()
         self._set_cards_enabled(True)
 
@@ -694,6 +790,7 @@ class MainWindow(QMainWindow):
                     locked,
                     rejected,
                     submitted=frozenset(group.words) in self._submitted_locks,
+                    theme=self.theme,
                 )
                 card.lock_changed.connect(self.toggle_lock)
                 card.reject_changed.connect(self.toggle_rejection)

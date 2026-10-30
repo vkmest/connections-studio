@@ -20,7 +20,7 @@ flowchart LR
 | `config.py` | Provider selection, environment/vault/preferences precedence and reference rates |
 | `providers.py` | Supported provider defaults and pinned official destinations |
 | `credentials.py` | Explicit OS-native vault selection; no plaintext fallback |
-| `preferences.py` | Provider/model preferences only; never serializes keys |
+| `preferences.py` | Separate provider/model and appearance preferences; never serializes keys |
 | `images.py` | Decode, orient, flatten, resize and strip image metadata |
 | `service.py` | OpenAI Responses, Kimi/DeepSeek chat, local Ollama, validation, cache and usage |
 | `structured_output.py` | Concrete JSON examples and conservative JSON-mode parsing |
@@ -32,6 +32,7 @@ flowchart LR
 | `gui/settings_dialog.py` | Provider selection and explicit credential save/removal |
 | `gui/theme.py` | Design tokens and Qt styles |
 | `gui/worker.py` | Worker signals and exception boundary |
+| `gui/dialogs.py` | Centered explicit-read prompt and nonblocking modal loading dialog |
 
 Desktop and terminal share the solver. The desktop extra installs Qt Essentials;
 no browser engine, local HTTP server or Tesseract executable is needed. CLI-only
@@ -125,6 +126,15 @@ Puzzle/settings controls are disabled during work. Workers emit data/errors by
 signals. Closing is deferred while busy, preventing destruction of a running
 thread. Errors preserve the puzzle. Qt handles high-DPI scaling; small windows
 scroll vertically.
+
+The desktop defaults to Extended; CLI/core defaults remain Budget. A pasted image
+opens a centered prompt; only its Read action starts extraction. Loading uses a
+nonblocking window-modal dialog while the QThread works. It ignores Escape/close
+because those actions cannot cancel an already-sent request, and hides when the
+thread finishes. Both popups recenter when their parent moves/resizes. Theme and
+sidebar state live in a separate, nonsecret `appearance.json`; provider Settings
+cannot overwrite them. The results action becomes New puzzle after all groups
+are confirmed, clearing puzzle state without a discard confirmation in that case.
 
 ## Privacy boundary
 

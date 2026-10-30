@@ -25,9 +25,10 @@ requires **Forget this provider's saved key → Save**; Cancel leaves it unchang
 Unchecked Remember does **not** delete a previously saved key. Provider switches
 discard unsaved edits in the dialog.
 
-Only provider/model preferences are written to your user configuration directory
+Provider/model preferences are written to your user configuration directory
 (on Windows, normally `%LOCALAPPDATA%\Connections Studio\preferences.json`).
 No key is included in that file, puzzle exports or the Settings representation.
+Separate `appearance.json` stores only the light/dark theme and sidebar visibility.
 Screenshots, puzzles and results stay in memory unless you explicitly export.
 The app has no telemetry, key-upload service or bundled credentials.
 
