@@ -176,6 +176,14 @@ Rates and account availability can change.
 | Read screenshot | None | 1,200 |
 | Budget solve | Low | 3,500 |
 | Deeper solve | Medium | 6,500 |
+| Extended solve | Medium | 16,000 |
+
+Extended uses a five-minute request timeout instead of the standard 90 seconds.
+Choose it explicitly under Solving style or pass `--mode extended`. It raises the
+allowance, not the price per token, but can cost more if the model uses more tokens.
+At the reference GPT-5.4 mini rate, 16,000 output tokens alone cost up to $0.072,
+plus input and any image extraction. It does not guarantee completion or accuracy.
+Reasoning uses the output allowance too: a token-budget error is not a timeout.
 
 A **hypothetical** solve with 1,500 uncached input tokens and 2,000 total output
 tokens costs approximately **$0.010125**, about one US cent. Image reading is
@@ -278,10 +286,10 @@ CLI feedback editing is not implemented; use the desktop to lock/reject groups.
 | API key needed/rejected | Add a key in Settings; verify project and permissions. |
 | Billing quota exhausted | Check API credits and project/organization billing limits. |
 | Rate limited | Wait before trying again; there are no hidden retries. |
-| Token budget exhausted | Try Deeper; review spelling and feedback first. |
+| Token budget exhausted | Review words/feedback; Extended allows 16,000 tokens and can cost more. |
 | Wrong/missing words | Crop a sharper grid or edit tiles manually. |
 | Clipboard has no image | Capture to clipboard or use Open image. |
-| Window won't close yet | A request is running (90-second cloud / 180-second local timeout); let it finish. |
+| Window won't close yet | A request is running (90-second cloud / 180-second local; Extended uses 300 seconds); let it finish. |
 | Cannot reach Ollama | Start Ollama; run `ollama pull qwen3-vl:4b`; check the selected model. |
 | OS credential store locked | Unlock the keychain, or leave Remember unchecked for a session-only key. |
 | Desktop support missing | Run `python -m pip install -e ".[desktop]"`. |

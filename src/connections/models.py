@@ -49,7 +49,7 @@ class SolveRequest(StrictModel):
     words: list[str]
     locked: list[Group] = Field(default_factory=list, max_length=4)
     rejected: list[list[str]] = Field(default_factory=list, max_length=32)
-    mode: Literal["budget", "deeper"] = "budget"
+    mode: Literal["budget", "deeper", "extended"] = "budget"
 
     @field_validator("words")
     @classmethod

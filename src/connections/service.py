@@ -134,7 +134,7 @@ class SolverService:
         if not fresh:
             if cached := self._cached(key):
                 return cached
-        deeper = request.mode == "deeper"
+        deeper = request.mode != "budget"
         locked_words = {word for group in request.locked for word in group.words}
         remaining = [word for word in request.words if word not in locked_words]
         count = 4 - len(request.locked)
@@ -157,7 +157,7 @@ class SolverService:
             SOLVE_PROMPT,
             json.dumps(payload),
             effort="medium" if deeper else "low",
-            max_tokens=6500 if deeper else 3500,
+            max_tokens={"budget": 3500, "deeper": 6500, "extended": 16000}[request.mode],
         )
         solution = Solution(
             groups=[
@@ -216,6 +216,7 @@ class SolverService:
                 text_format=schema,
                 reasoning={"effort": effort},
                 max_output_tokens=max_tokens,
+                timeout=300.0 if max_tokens > 6500 else 90.0,
                 store=False,
             )
         except AuthenticationError:
@@ -251,9 +252,28 @@ class SolverService:
             ) from None
         usage = self._usage(response)
         if response.status == "incomplete":
+            reason = getattr(response.incomplete_details, "reason", None)
+            if reason != "max_output_tokens":
+                message = (
+                    "The provider filtered the response. Review the input; "
+                    "increasing the token budget will not resolve a content filter. "
+                    if reason == "content_filter"
+                    else "The provider returned an incomplete response "
+                    "without a token-limit reason. "
+                )
+                raise ServiceError(
+                    message + "No automatic retry was made. This request may be billed.", usage
+                )
             raise ServiceError(
-                "The response stopped before finishing its token budget. Try deeper "
-                "mode or simplify the image. This request may be billed.",
+                f"The model exhausted its {max_tokens:,}-token output budget "
+                "(including reasoning); this is not a timeout. "
+                + (
+                    "Try Extended mode or a cheaper provider. "
+                    if max_tokens < 16000
+                    else "Extended's limit was reached too. "
+                    "Try a different model or add confirmed groups. "
+                )
+                + "No automatic retry was made. This request may be billed.",
                 usage,
             )
         if response.output_parsed is None:
@@ -293,6 +313,7 @@ class SolverService:
             ],
             response_format={"type": "json_object"},
             max_tokens=max_tokens,
+            timeout=300.0 if max_tokens > 6500 else 90.0,
             **options,
         )
         raw_usage = response.usage
@@ -325,7 +346,10 @@ class SolverService:
         model = self.settings.model
         try:
             # Check before sending puzzle data, including aliases with innocent-looking names.
-            info_response = self._local_client.post(base + "/api/show", json={"model": model})
+            timeout = 300.0 if max_tokens > 6500 else 180.0
+            info_response = self._local_client.post(
+                base + "/api/show", json={"model": model}, timeout=timeout
+            )
             info_response.raise_for_status()
             info = info_response.json()
             if (
@@ -365,11 +389,14 @@ class SolverService:
                     },
                     user_message,
                 ],
-                "options": {"num_ctx": 8192, "num_predict": max_tokens},
+                "options": {
+                    "num_ctx": max_tokens + 4096 if max_tokens > 6500 else 8192,
+                    "num_predict": max_tokens,
+                },
             }
             if "thinking" in info.get("capabilities", []):
                 body["think"] = False
-            response = self._local_client.post(base + "/api/chat", json=body)
+            response = self._local_client.post(base + "/api/chat", json=body, timeout=timeout)
             response.raise_for_status()
             result = response.json()
             if result.get("done") is not True or result.get("done_reason") == "length":

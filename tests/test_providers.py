@@ -15,7 +15,8 @@ from connections.service import ServiceError, SolverService
 @pytest.mark.parametrize(
     "provider,host", [("kimi", "api.moonshot.ai"), ("deepseek", "api.deepseek.com")]
 )
-def test_cloud_chat_uses_own_key_and_validated_json(provider, host):
+@pytest.mark.parametrize("mode", ["budget", "extended"])
+def test_cloud_chat_uses_own_key_and_validated_json(provider, host, mode):
     settings = Settings(provider=provider, api_key="provider-only")
     requests = []
 
@@ -51,22 +52,22 @@ def test_cloud_chat_uses_own_key_and_validated_json(provider, host):
         http_client=httpx.Client(transport=httpx.MockTransport(handle)),
     )
     service = SolverService(settings, client=client)
-    result = service.solve(SolveRequest(words=WORDS))
+    result = service.solve(SolveRequest(words=WORDS, mode=mode))
     assert len(result.value.groups) == 4
     assert requests[0].url.host == host
     assert requests[0].headers["authorization"] == "Bearer provider-only"
     assert result.usage.estimated_cost_usd is None
     body = json.loads(requests[0].content)
     assert body["response_format"] == {"type": "json_object"}
-    assert body["max_tokens"] == 3500
-    assert (
-        body["reasoning_effort"] == "low"
-        if provider == "kimi"
-        else body["thinking"] == {"type": "disabled"}
-    )
+    assert body["max_tokens"] == (16000 if mode == "extended" else 3500)
+    assert requests[0].extensions["timeout"]["read"] == (300 if mode == "extended" else 90)
+    if provider == "kimi":
+        assert body["reasoning_effort"] == ("high" if mode == "extended" else "low")
+    else:
+        assert body["thinking"] == {"type": "enabled" if mode == "extended" else "disabled"}
 
 
-def local_service(*, remote=False, malformed=False):
+def local_service(*, remote=False, malformed=False, solving=False):
     requests = []
 
     def handle(request):
@@ -86,7 +87,13 @@ def local_service(*, remote=False, malformed=False):
                 "done": True,
                 "done_reason": "stop",
                 "message": {
-                    "content": "{}" if malformed else json.dumps({"words": WORDS, "warning": ""})
+                    "content": "{}"
+                    if malformed
+                    else json.dumps(
+                        {"groups": [g.model_dump() for g in groups()]}
+                        if solving
+                        else {"words": WORDS, "warning": ""}
+                    )
                 },
                 "prompt_eval_count": 100,
                 "eval_count": 100,
@@ -127,3 +134,12 @@ def test_bad_local_output_never_reaches_the_grid():
     service, _ = local_service(malformed=True)
     with pytest.raises(ServiceError, match="valid"):
         service.extract(prepare_image(make_image()))
+
+
+def test_extended_local_budget_has_enough_context_and_longer_request_timeout():
+    service, requests = local_service(solving=True)
+    result = service.solve(SolveRequest(words=WORDS, mode="extended"))
+    assert len(result.value.groups) == 4
+    body = json.loads(requests[-1].content)
+    assert body["options"] == {"num_ctx": 20096, "num_predict": 16000}
+    assert all(request.extensions["timeout"]["read"] == 300 for request in requests)

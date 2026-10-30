@@ -233,3 +233,12 @@ def test_replaced_cards_are_hidden_before_deferred_deletion(qtbot):
     assert old_card.isVisible()
     widget.toggle_lock(0, True)
     assert not old_card.isVisible()
+
+
+def test_extended_style_is_explicit_and_warns_about_cost(qtbot):
+    widget = window(qtbot)
+    widget.set_words(DEMO_WORDS)
+    widget.mode.setCurrentIndex(widget.mode.findData("extended"))
+    assert widget.mode.currentData() == "extended"
+    assert "16,000" in widget.board_note.text()
+    assert "cost" in widget.board_note.text().lower()

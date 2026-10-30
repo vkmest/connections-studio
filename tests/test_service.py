@@ -171,6 +171,47 @@ def test_deeper_mode_uses_larger_explicit_budget():
     assert requests[0]["reasoning"]["effort"] == "medium"
 
 
+def test_extended_mode_allows_more_tokens_and_time_without_increasing_reasoning(monkeypatch):
+    service, requests = make_service(response_body({"groups": [g.model_dump() for g in groups()]}))
+    recorded = []
+    original = service._client.responses.parse
+
+    def parse(**options):
+        recorded.append(options["timeout"])
+        return original(**options)
+
+    monkeypatch.setattr(service._client.responses, "parse", parse)
+    service.solve(SolveRequest(words=WORDS, mode="extended"))
+    assert requests[0]["max_output_tokens"] == 16000
+    assert requests[0]["reasoning"]["effort"] == "medium"
+    assert recorded == [300.0]
+
+
+def test_token_exhaustion_message_distinguishes_time_from_budget():
+    body = response_body({}, status="incomplete")
+    body["output"] = []
+    body["incomplete_details"] = {"reason": "max_output_tokens"}
+    service, _ = make_service(body)
+    with pytest.raises(ServiceError) as error:
+        service.solve(SolveRequest(words=WORDS, mode="deeper"))
+    assert "6,500" in str(error.value)
+    assert "Extended" in str(error.value)
+    assert "not a timeout" in str(error.value)
+
+
+@pytest.mark.parametrize("reason", ["content_filter", None])
+def test_other_incomplete_responses_do_not_recommend_a_larger_budget(reason):
+    body = response_body({}, status="incomplete")
+    body["output"] = []
+    body["incomplete_details"] = {"reason": reason} if reason else None
+    service, _ = make_service(body)
+    with pytest.raises(ServiceError) as error:
+        service.solve(SolveRequest(words=WORDS))
+    assert "Extended" not in str(error.value)
+    assert "exhausted" not in str(error.value)
+    assert error.value.usage is not None
+
+
 def test_key_is_never_redirected_by_sdk_base_url_environment(monkeypatch):
     monkeypatch.setenv("OPENAI_BASE_URL", "https://example.invalid/v1")
     service = SolverService(Settings(api_key="test-key"))

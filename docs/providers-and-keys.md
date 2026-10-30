@@ -118,6 +118,18 @@ The API cost display is zero, not a measurement of electricity costs. A local
 request times out after 180 seconds; timeout does not guarantee that Ollama has
 stopped computing. Start with a smaller model if it repeatedly times out.
 
+**Extended mode** raises the solve allowance to 16,000 tokens and the request
+timeout to 300 seconds for all providers. OpenAI still uses medium reasoning,
+Kimi/DeepSeek use high; local optional thinking remains disabled. Ollama's context
+increases to 20,096 tokens in this mode, which can require substantially more
+memory. Ordinary modes retain the 8,192-token context. Prefer Budget locally first.
+
+If you want cheaper cloud experiments, choose DeepSeek → `deepseek-flash` and
+start with Budget. Current rates checked October 30, 2026 are $0.15–$0.30 per
+million uncached input tokens and $0.60–$1.20 per million output tokens, depending
+on off-peak/peak hours. This is cheaper per token than GPT-5.4 mini, but puzzle
+accuracy has not been compared. See [official pricing](https://api-docs.deepseek.com/quick_start/pricing/).
+
 macOS/Linux: install Ollama from its official site, apply its documented
 `OLLAMA_NO_CLOUD` configuration for your service/launcher, and use the same pull
 command. Connections Studio requires Ollama on the **same computer**, at its

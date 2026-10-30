@@ -51,7 +51,9 @@ def build_parser() -> argparse.ArgumentParser:
                 "--words-file", type=Path, help="UTF-8 text file, one word per line"
             )
             source.add_argument("--demo", action="store_true", help="Offline example; no API usage")
-            command.add_argument("--mode", choices=["budget", "deeper"], default="budget")
+            command.add_argument(
+                "--mode", choices=["budget", "deeper", "extended"], default="budget"
+            )
         command.add_argument("--json", action="store_true", help="Machine-readable output")
         command.add_argument("--model", help="Override CONNECTIONS_MODEL (advanced)")
         command.add_argument("--provider", choices=list(PROVIDERS), help="Override saved provider")

@@ -4,7 +4,7 @@ Verified locally on Windows, Python 3.13.2, October 30, 2026.
 
 ## Automated checks
 
-- **69 tests pass**: board normalization, duplicate/blank rejection, full partition
+- **77 tests pass**: board normalization, duplicate/blank rejection, full partition
   integrity, locks/rejected sets, safe image handling, service caching/costs,
   typed output via the real SDK, API error/refusal/incomplete responses, explicit
   reasoning/token settings, CLI output and desktop state/lifecycle. Provider tests
@@ -16,6 +16,11 @@ Verified locally on Windows, Python 3.13.2, October 30, 2026.
   export protection on failure, and neutral feedback after success.
   Individual submitted confirmations remain undoable, and replaced cards are
   hidden immediately to prevent overlap during deferred Qt widget deletion.
+  Extended mode is tested through the real SDK's mocked HTTP boundary for OpenAI,
+  Kimi and DeepSeek, and the local Ollama boundary: 16,000 tokens, longer request
+  timeout, compatible reasoning and sufficient local context. Incomplete content-
+  filtered/unknown responses never receive token-exhaustion advice. UI tests
+  verify explicit selection and the increased-cost notice.
 - Ruff lint and format checks pass.
 - Wheel and source distribution build successfully. Their contents were checked
   for required source and absence of `.env` / virtual environments.

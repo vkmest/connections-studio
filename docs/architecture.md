@@ -64,6 +64,10 @@ reasoning `none` / 1,200 output tokens; budget uses `low` / 3,500; deeper uses
 `medium` / 6,500. Limits include reasoning tokens. Incomplete, refused or invalid
 output is a recoverable error. SDK retries are disabled and timeout is 90 seconds.
 A failed/timed-out request can still be billed.
+Extended mode uses medium OpenAI reasoning, 16,000 output tokens and a 300-second
+per-request timeout for every provider. Kimi/DeepSeek retain Deeper's reasoning.
+Local context increases to output allowance plus 4,096 tokens (20,096 total).
+Token-budget errors explicitly distinguish exhaustion from a network timeout.
 
 Kimi and DeepSeek use official Chat Completions APIs with JSON mode, a schema in
 the prompt and the same local validation. Kimi uses low/high reasoning; DeepSeek

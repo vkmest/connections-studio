@@ -101,7 +101,7 @@ class SettingsDialog(QDialog):
         self.model_input.setText(settings.model)
         self.destination.setText("Destination: " + provider.base_url)
         notes = {
-            "openai": "Recommended: gpt-5.4-mini. Budget uses low reasoning; Deeper uses medium.\n"
+            "openai": "Default: gpt-5.4-mini. Budget: low; Deeper/Extended: medium reasoning.\n"
             "Reference rates: $0.75 input / $4.50 output per million tokens.",
             "kimi": "Default: kimi-k3.1-pro. Hosted API, billed by Moonshot.\n"
             "Budget uses low reasoning; Deeper uses high. Kimi K2.5 API is retired.",

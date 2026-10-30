@@ -78,6 +78,7 @@ class MainWindow(QMainWindow):
         self.setStyleSheet(STYLE)
         self.setAcceptDrops(True)
         self._build()
+        self.mode.currentIndexChanged.connect(self._refresh)
         self._refresh()
         if configuration_error:
             self._message(configuration_error)
@@ -244,8 +245,12 @@ class MainWindow(QMainWindow):
         self.mode = QComboBox()
         self.mode.addItem("Budget · everyday", "budget")
         self.mode.addItem("Deeper · tricky puzzles", "deeper")
+        self.mode.addItem("Extended · more time/tokens", "extended")
         self.mode.setAccessibleName("Solving style")
-        self.mode.setToolTip("Budget uses fewer reasoning tokens. Deeper allows more thinking.")
+        self.mode.setToolTip(
+            "Budget: 3,500 tokens. Deeper: 6,500. Extended: 16,000 and a five-minute "
+            "request timeout. Larger allowances can increase cloud costs."
+        )
         options.addWidget(self.mode)
         right.addLayout(options)
         self.solve_button = button("Find connections  →", "Primary", self.start_solve)
@@ -326,7 +331,12 @@ class MainWindow(QMainWindow):
         try:
             SolveRequest(words=words)
             valid = True
-            note = "Ready when you are. Each word will be used exactly once."
+            note = (
+                "Extended: 16,000 tokens · up to five minutes per request. "
+                "May increase cloud cost and local memory use."
+                if self.mode.currentData() == "extended"
+                else "Ready when you are. Each word will be used exactly once."
+            )
         except ValueError:
             valid = False
             note = "Use 16 unique words. Check for empty or duplicate tiles."
