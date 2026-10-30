@@ -95,8 +95,8 @@ confirmed both fixes and reported no additional findings in those changes.
 
 ## What this does not establish
 
-No provider API key was configured, so **no live paid image extraction or puzzle
-solve was performed**. Ollama/model weights were not installed or downloaded;
+These verification checks made **no live paid image extraction or puzzle solve
+requests**. Ollama/model weights were not installed or downloaded;
 local inference has not been benchmarked. Mock API tests establish request/response handling, not
 model availability, account access, solving accuracy, latency or real charges.
 The example is intentionally predefined and makes no accuracy claim.

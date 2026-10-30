@@ -29,7 +29,7 @@ are included. The predefined demo works completely offline.
   confidence. Every word must appear exactly once.
 - **Refine the answer:** confirm correct groups, reject incorrect sets and rethink
   the remaining words.
-- **Control costs:** budget/deeper modes, token limits, session cost estimates,
+- **Control costs:** adjustable thinking budgets, token limits, session cost estimates,
   cached identical requests and no automatic paid retries.
 - **Try it free:** the offline example needs neither a key nor a connection.
 - **Choose your provider:** OpenAI, Kimi, DeepSeek, or free local inference with Ollama.
@@ -46,17 +46,16 @@ and not endorsed by The New York Times.
 
 ## Quick start — Windows
 
-Install **64-bit Python 3.11 or newer**. Open PowerShell in this project folder:
-
-Get the project first using Git:
+Install **64-bit Python 3.11 or newer** and [Git](https://git-scm.com/downloads).
+Open PowerShell and download the project:
 
 ```powershell
 git clone https://github.com/vkmest/connections-studio.git
 cd connections-studio
 ```
 
-Or choose **Code → Download ZIP** on GitHub, extract it, and open PowerShell in
-the extracted folder. Then install and try the free demo:
+Alternatively, choose **Code → Download ZIP** on GitHub (no Git needed), extract
+it, and open PowerShell in the extracted folder. Install and try the free demo:
 
 ```powershell
 py -3 -m venv .venv
@@ -206,9 +205,10 @@ as text or export suggestions/feedback to JSON.
 
 Identical ordinary solve requests reuse the session cache. **Rethink remaining**
 explicitly requests a fresh response and can incur another cloud charge. Add
-feedback to rule out wrong sets, or select Deeper under **Edit the words**. A fresh
-request can still reach the same conclusion if you do not reject it. The offline example is
-predefined: it demonstrates the interface, not AI accuracy. Edit the board to
+feedback to rule out wrong sets, or adjust the solving style under **Edit the words**.
+Repeated arrangements are refused; a failed rethink may show a labeled random
+fallback instead. The offline example is predefined: it demonstrates the interface,
+not AI accuracy. Edit the board to
 leave demo mode and use the live solver.
 
 | Shortcut | Action |
@@ -360,7 +360,7 @@ CLI feedback editing is not implemented; use the desktop to lock/reject groups.
 | Desktop support missing | Run `python -m pip install -e ".[desktop]"`. |
 | Module not found | Install from this project folder with the same Python. |
 
-## Development and publishing
+## Development
 
 ```sh
 python -m pip install -e ".[desktop,dev]"
@@ -385,7 +385,6 @@ docs, examples, `pyproject.toml`, `.env.example` and the license. Exclude `.env`
 virtual environments, caches and personal screenshots. The old `config.py` and
 its credentials are deliberately excluded from this rewrite.
 
-Create an empty GitHub repository, add it as `origin`, and push your chosen branch.
 The MIT license covers this project's code and original example assets; dependencies
 retain their licenses (Qt/PySide6 uses LGPL/commercial terms). Review those terms
 before distributing a bundled binary. No installer or hosted backend is included.

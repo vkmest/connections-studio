@@ -96,8 +96,8 @@ From the project folder on Windows:
 ```
 
 CLI image solves perform extraction and solving sequentially. Use `extract` first
-when you want manual review. Terminal commands default to Budget; use `--mode
-extended` explicitly for a larger allowance. See [all terminal options](../README.md#terminal-usage).
+when you want manual review. Terminal commands default to Budget; use
+`--mode extended` explicitly for a larger allowance. See [all terminal options](../README.md#terminal-usage).
 
 ## If something goes wrong
 

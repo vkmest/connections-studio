@@ -95,8 +95,7 @@ their output and use cloud models when useful.
 5. Paste a screenshot, click Read words, correct the tiles, then Find connections.
    The first request can be slower while the model loads.
 
-The 4B model is a sensible first trial on a 32 GB RAM laptop with an RTX 3070 Ti
-Laptop GPU. This is a hardware-based starting recommendation, not a benchmark.
+Check your available RAM and GPU memory before downloading a model.
 Model file sizes below exclude context memory, runtime overhead and application
 storage. A model fitting in RAM does not guarantee full GPU acceleration.
 

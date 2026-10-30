@@ -112,8 +112,9 @@ mismatched answers receive separate errors with usage preserved. They are not re
 Ollama uses its native `/api/chat` JSON schema format. Before sending puzzle data,
 `/api/show` must describe a local GGUF model without remote metadata; image requests
 also require vision capability. The client uses only `127.0.0.1:11434`, sends no
-key, disables optional thinking, caps context at 8,192 and times out after 180
-seconds per request. All clients disable environment proxies and redirects.
+key and disables optional thinking. Budget/Deeper use an 8,192-token context and
+180-second timeout; Extended uses the larger limits described above.
+All clients disable environment proxies and redirects.
 No automatic provider fallback is implemented.
 
 A service instance caches at most 24 successful typed results in memory, keyed by
