@@ -53,6 +53,13 @@ def test_valid_partition_accepted():
     Solution(groups=groups()).validate_for(SolveRequest(words=WORDS))
 
 
+def test_history_from_another_board_is_rejected():
+    previous = Solution(groups=groups())
+    previous.groups[0].words[0] = "OTHER BOARD"
+    with pytest.raises(ValueError, match="Previous attempts"):
+        SolveRequest(words=WORDS, previous_attempts=[previous])
+
+
 def test_conflicting_locks_and_unknown_rejections_rejected():
     with pytest.raises(ValueError):
         SolveRequest(words=WORDS, locked=[groups()[0], groups()[0]])

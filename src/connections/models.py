@@ -49,6 +49,7 @@ class SolveRequest(StrictModel):
     words: list[str]
     locked: list[Group] = Field(default_factory=list, max_length=4)
     rejected: list[list[str]] = Field(default_factory=list, max_length=32)
+    previous_attempts: list["Solution"] = Field(default_factory=list, max_length=32)
     mode: Literal["budget", "deeper", "extended"] = "budget"
 
     @field_validator("words")
@@ -73,6 +74,11 @@ class SolveRequest(StrictModel):
                 raise ValueError("A rejected group contains a word outside this board.")
             if any(set(rejected) == set(group.words) for group in self.locked):
                 raise ValueError("A group cannot be both locked and rejected.")
+        for attempt in self.previous_attempts:
+            if Counter(word for group in attempt.groups for word in group.words) != Counter(
+                self.words
+            ):
+                raise ValueError("Previous attempts must use this board's words exactly once.")
         return self
 
 
@@ -88,6 +94,21 @@ class Solution(StrictModel):
             raise ValueError("The answer changed a locked group.")
         if any(set(rejected) in sets for rejected in request.rejected):
             raise ValueError("The answer repeated a rejected group.")
+        remaining = set(request.words) - {word for group in request.locked for word in group.words}
+        current = frozenset(
+            frozenset(group.words) for group in self.groups if set(group.words).issubset(remaining)
+        )
+        for attempt in request.previous_attempts:
+            previous = frozenset(
+                frozenset(group.words)
+                for group in attempt.groups
+                if set(group.words).issubset(remaining)
+            )
+            if current and current == previous:
+                raise ValueError("The answer repeated a previous unresolved grouping.")
+
+
+SolveRequest.model_rebuild()
 
 
 class Extraction(StrictModel):

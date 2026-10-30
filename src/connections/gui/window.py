@@ -63,6 +63,7 @@ class MainWindow(QMainWindow):
         self.solution: Solution | None = None
         self.locked: list[Group] = []
         self.rejected: list[list[str]] = []
+        self.attempt_history: list[Solution] = []
         self._awaiting_rethink = False
         self._submitted_locks: set[frozenset[str]] = set()
         self.demo_mode = False
@@ -369,7 +370,9 @@ class MainWindow(QMainWindow):
             and not self.busy
             and not self.demo_mode
         )
-        self.clear_feedback.setEnabled(not self.busy and bool(self.locked or self.rejected))
+        self.clear_feedback.setEnabled(
+            not self.busy and bool(self.locked or self.rejected or self.attempt_history)
+        )
         self.key_status.setText(
             "Offline example"
             if self.demo_mode
@@ -396,12 +399,18 @@ class MainWindow(QMainWindow):
         )
         self.feedback_note.setText(
             f"{len(self.locked)} of 4 confirmed  ·  {len(self.rejected)} rejected sets"
+            + (
+                f"  ·  {len(self.attempt_history)} arrangements tried"
+                if self.attempt_history
+                else ""
+            )
         )
 
     def _invalidate(self):
         self.solution = None
         self.locked = []
         self.rejected = []
+        self.attempt_history = []
         self._awaiting_rethink = False
         self._submitted_locks.clear()
         self.demo_mode = False
@@ -553,6 +562,7 @@ class MainWindow(QMainWindow):
                 words=[entry.text() for entry in self.word_inputs],
                 locked=self.locked,
                 rejected=self.rejected,
+                previous_attempts=self.attempt_history,
                 mode=self.mode.currentData(),
             )
         except ValueError:
@@ -560,6 +570,7 @@ class MainWindow(QMainWindow):
             return
         if self.demo_mode:
             self.solution = demo_solution()
+            self._remember_attempt(self.solution)
             self._render_results()
             self.show_results()
             self._message("Offline example · these groups are predefined, with zero API cost.")
@@ -605,6 +616,16 @@ class MainWindow(QMainWindow):
         else:
             self.session_cost += usage.estimated_cost_usd
 
+    def _remember_attempt(self, solution: Solution):
+        key = frozenset(frozenset(group.words) for group in solution.groups)
+        if any(
+            key == frozenset(frozenset(group.words) for group in attempt.groups)
+            for attempt in self.attempt_history
+        ):
+            return
+        self.attempt_history.append(solution.model_copy(deep=True))
+        self.attempt_history = self.attempt_history[-32:]
+
     @Slot(object)
     def _succeeded(self, result: OperationResult):
         self._add_usage(result.usage)
@@ -616,6 +637,7 @@ class MainWindow(QMainWindow):
         else:
             self._awaiting_rethink = False
             self.solution = result.value
+            self._remember_attempt(self.solution)
             self._render_results()
             self.show_results()
             self._message(
@@ -627,6 +649,8 @@ class MainWindow(QMainWindow):
     @Slot(object)
     def _failed(self, error):
         self._add_usage(getattr(error, "usage", None))
+        if getattr(error, "attempt", None) is not None:
+            self._remember_attempt(error.attempt)
         self._message(
             "No new answer was accepted. Confirmed groups and rejected sets are still saved. "
             + str(error)
@@ -721,10 +745,13 @@ class MainWindow(QMainWindow):
             return
         self.locked = []
         self.rejected = []
+        self.attempt_history = []
         self._submitted_locks.clear()
         # Do not resurrect rejected cards after a failed rethink.
         self._render_results()
-        self._message("Feedback cleared. Your current suggestions are still here.")
+        self._message(
+            "Feedback and search history cleared. Current visible suggestions are unchanged."
+        )
 
     def show_workspace(self):
         self.pages.setCurrentIndex(0)
@@ -775,6 +802,7 @@ class MainWindow(QMainWindow):
                     "solution": self.solution.model_dump(),
                     "locked": [group.model_dump() for group in self.locked],
                     "rejected": self.rejected,
+                    "previous_attempts": [attempt.model_dump() for attempt in self.attempt_history],
                     "demo": self.demo_mode,
                 }
                 Path(filename).write_text(json.dumps(payload, indent=2), encoding="utf-8")

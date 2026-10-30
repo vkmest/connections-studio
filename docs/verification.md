@@ -4,7 +4,7 @@ Verified locally on Windows, Python 3.13.2, October 30, 2026.
 
 ## Automated checks
 
-- **77 tests pass**: board normalization, duplicate/blank rejection, full partition
+- **82 tests pass**: board normalization, duplicate/blank rejection, full partition
   integrity, locks/rejected sets, safe image handling, service caching/costs,
   typed output via the real SDK, API error/refusal/incomplete responses, explicit
   reasoning/token settings, CLI output and desktop state/lifecycle. Provider tests
@@ -21,6 +21,10 @@ Verified locally on Windows, Python 3.13.2, October 30, 2026.
   timeout, compatible reasoning and sufficient local context. Incomplete content-
   filtered/unknown responses never receive token-exhaustion advice. UI tests
   verify explicit selection and the increased-cost notice.
+  History regressions verify previous groups in the outgoing payload, refusal of
+  renamed/reordered previous partitions, allowance for partial group reuse when
+  others change, retention of failed candidates, history reset, cross-board
+  rejection and no network request for an impossible final-four rearrangement.
 - Ruff lint and format checks pass.
 - Wheel and source distribution build successfully. Their contents were checked
   for required source and absence of `.env` / virtual environments.

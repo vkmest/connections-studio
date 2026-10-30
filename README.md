@@ -136,6 +136,15 @@ Confirmed groups remain labeled as kept; rejection history remains active. If th
 provider fails or repeats a rejected set, the app shows an explicit failure state,
 not the previous answer. Clear feedback removes the saved constraints.
 
+Each rethink also sends the last 32 distinct arrangements tried for this puzzle,
+including structurally valid answers refused for violating feedback. Confirmed
+groups are removed from that context; the model must change the grouping of the
+remaining words, not just names or ordering. The app rejects an unchanged remaining
+partition. Unconfirmed individual groups may stay if the overall partition changes.
+Clear feedback or a new board resets this in-memory search history. Additional
+history increases input tokens. If only four previously tried words remain, undo
+a confirmation before asking for a different arrangement; no paid request is sent.
+
 You can type words directly or paste 16 entries separated by newlines, commas,
 semicolons or tabs. Spaces inside phrases are preserved. Editing a tile clears
 stale results and feedback; a new screenshot clears the old grid. Copy answers

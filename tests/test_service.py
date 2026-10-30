@@ -116,6 +116,55 @@ def test_explicit_rethink_bypasses_identical_cached_answer():
     assert len(requests) == 2
 
 
+def test_rethink_sends_prior_groups_and_refuses_renamed_reordered_partition():
+    from connections.models import Solution
+
+    previous = Solution(groups=groups())
+    renamed = groups()[1:]
+    for group in renamed:
+        group.title = "Another label"
+        group.words.reverse()
+    service, requests = make_service(
+        response_body({"groups": [g.model_dump() for g in reversed(renamed)]})
+    )
+    request = SolveRequest(words=WORDS, locked=groups()[:1], previous_attempts=[previous])
+    with pytest.raises(ServiceError, match="previous") as error:
+        service.solve(request, fresh=True)
+    payload = json.loads(requests[0]["input"][0]["content"])
+    assert len(payload["previous_attempts"][0]["groups"]) == 3
+    assert payload["previous_attempts"][0]["groups"][0]["words"] == groups()[1].words
+    assert "previous_attempts" in requests[0]["instructions"]
+    assert error.value.attempt is not None
+
+
+def test_rethink_can_keep_one_unconfirmed_group_when_other_groups_change():
+    from connections.models import Solution
+
+    changed = groups()
+    changed[2].words[0], changed[3].words[0] = changed[3].words[0], changed[2].words[0]
+    service, _ = make_service(response_body({"groups": [g.model_dump() for g in changed[1:]]}))
+    result = service.solve(
+        SolveRequest(
+            words=WORDS, locked=groups()[:1], previous_attempts=[Solution(groups=groups())]
+        )
+    )
+    assert result.value.groups == changed
+
+
+def test_only_four_previously_tried_words_cannot_be_rearranged_without_unlocking():
+    from connections.models import Solution
+
+    service, requests = make_service({})
+    with pytest.raises(ServiceError, match="Undo a confirmation"):
+        service.solve(
+            SolveRequest(
+                words=WORDS, locked=groups()[:3], previous_attempts=[Solution(groups=groups())]
+            ),
+            fresh=True,
+        )
+    assert not requests
+
+
 @pytest.mark.parametrize(
     "status,code,match",
     [

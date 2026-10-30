@@ -242,3 +242,36 @@ def test_extended_style_is_explicit_and_warns_about_cost(qtbot):
     assert widget.mode.currentData() == "extended"
     assert "16,000" in widget.board_note.text()
     assert "cost" in widget.board_note.text().lower()
+
+
+def test_rethink_includes_history_and_remembers_refused_attempts(qtbot, monkeypatch):
+
+    widget = window(qtbot)
+    widget.load_demo()
+    widget.start_solve()
+    assert widget.clear_feedback.isEnabled()
+    widget.demo_mode = False
+    old = demo_solution()
+    changed = demo_solution()
+    changed.groups[2].words[0], changed.groups[3].words[0] = (
+        changed.groups[3].words[0],
+        changed.groups[2].words[0],
+    )
+    captured = []
+
+    def fail(request, **options):
+        captured.append(request)
+        raise ServiceError("Rejected candidate", attempt=changed)
+
+    monkeypatch.setattr(widget.service, "solve", fail)
+    widget.start_solve()
+    qtbot.waitUntil(lambda: not widget.busy, timeout=5000)
+    assert captured[0].previous_attempts == [old]
+    widget.start_solve()
+    qtbot.waitUntil(lambda: not widget.busy, timeout=5000)
+    assert captured[1].previous_attempts == [old, changed]
+    widget.clear_feedback.click()
+    assert widget.attempt_history == []
+    assert not widget.clear_feedback.isEnabled()
+    widget.set_words(DEMO_WORDS)
+    assert widget.attempt_history == []

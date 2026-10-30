@@ -57,6 +57,18 @@ failure; the UI explicitly says no new answer was accepted. Copy/export are disa
 until a valid replacement arrives. Clear feedback removes constraints without
 resurrecting hidden old suggestions.
 
+`SolveRequest.previous_attempts` holds up to 32 complete, board-validated solutions.
+The desktop records distinct word partitions from successes and structurally valid
+constraint failures (via `ServiceError.attempt`), preserving history across provider
+changes. Names, word order and group order do not create a distinct arrangement.
+The service sends prior unresolved groups with category titles alongside rejected
+sets. Local validation compares unresolved partitions against history; it does not
+treat every previously unconfirmed individual group as wrong. A final four-word
+set that has already been tried/rejected cannot be rearranged without unlocking a
+confirmation, so that case errors before network work. History is included in
+explicit exports and cleared on a new board or Clear feedback. It is not persisted
+automatically. Historical groups also affect the ordinary solve cache key.
+
 ## API and usage
 
 OpenAI's `client.responses.parse()` uses Pydantic schemas and `store=False`. Extraction uses
