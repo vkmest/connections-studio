@@ -32,6 +32,13 @@ connections-studio = "connections.gui.app:main"
 [tool.hatch.build.targets.wheel]
 packages = ["src/connections"]
 
+[tool.hatch.build.targets.sdist]
+only-include = [
+  "src", "tests", "docs", "examples", "scripts", ".github",
+  "README.md", "CONTRIBUTING.md", "SECURITY.md", "LICENSE",
+  "pyproject.toml", "launch.cmd", ".gitignore", ".gitattributes", ".env.example",
+]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
