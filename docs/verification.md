@@ -4,13 +4,18 @@ Verified locally on Windows, Python 3.13.2, October 30, 2026.
 
 ## Automated checks
 
-- **62 tests pass**: board normalization, duplicate/blank rejection, full partition
+- **69 tests pass**: board normalization, duplicate/blank rejection, full partition
   integrity, locks/rejected sets, safe image handling, service caching/costs,
   typed output via the real SDK, API error/refusal/incomplete responses, explicit
   reasoning/token settings, CLI output and desktop state/lifecycle. Provider tests
   cover Kimi/DeepSeek chat serialization, Ollama image transport, rejection of
   cloud-backed aliases before puzzle submission, malformed output, per-provider
   vault isolation, secret-free preferences, hidden CLI prompts and UI key handling.
+  Rethink regressions cover remaining-only requests and exact group count, local
+  confirmation merging, rejected-output refusal, selection resets, stale-card and
+  export protection on failure, and neutral feedback after success.
+  Individual submitted confirmations remain undoable, and replaced cards are
+  hidden immediately to prevent overlap during deferred Qt widget deletion.
 - Ruff lint and format checks pass.
 - Wheel and source distribution build successfully. Their contents were checked
   for required source and absence of `.env` / virtual environments.

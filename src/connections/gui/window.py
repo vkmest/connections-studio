@@ -63,6 +63,8 @@ class MainWindow(QMainWindow):
         self.solution: Solution | None = None
         self.locked: list[Group] = []
         self.rejected: list[list[str]] = []
+        self._awaiting_rethink = False
+        self._submitted_locks: set[frozenset[str]] = set()
         self.demo_mode = False
         self.busy = False
         self.session_cost = 0.0
@@ -348,6 +350,9 @@ class MainWindow(QMainWindow):
         ):
             control.setEnabled(not self.busy)
         self.results_nav.setEnabled(self.solution is not None)
+        can_export = self.solution is not None and not self.busy and not self._awaiting_rethink
+        self.copy_button.setEnabled(can_export)
+        self.export_button.setEnabled(can_export)
         self.retry_button.setEnabled(
             self.solution is not None
             and len(self.locked) < 4
@@ -387,6 +392,8 @@ class MainWindow(QMainWindow):
         self.solution = None
         self.locked = []
         self.rejected = []
+        self._awaiting_rethink = False
+        self._submitted_locks.clear()
         self.demo_mode = False
         self._clear_cards()
 
@@ -547,7 +554,17 @@ class MainWindow(QMainWindow):
             self.show_results()
             self._message("Offline example · these groups are predefined, with zero API cost.")
             return
-        self._run("solve", lambda: self.service.solve(request))
+        is_rethink = self.solution is not None
+        if is_rethink:
+            self._awaiting_rethink = True
+            self._submitted_locks = {frozenset(group.words) for group in self.locked}
+            self._render_results()
+        self._run(
+            "solve",
+            (lambda: self.service.solve(request, fresh=True))
+            if is_rethink
+            else (lambda: self.service.solve(request)),
+        )
 
     def _run(self, operation: str, callback):
         self.busy = True
@@ -587,6 +604,7 @@ class MainWindow(QMainWindow):
             self._message(warning or "Words read. Check spelling in all 16 tiles before solving.")
             self.word_inputs[0].setFocus()
         else:
+            self._awaiting_rethink = False
             self.solution = result.value
             self._render_results()
             self.show_results()
@@ -599,7 +617,14 @@ class MainWindow(QMainWindow):
     @Slot(object)
     def _failed(self, error):
         self._add_usage(getattr(error, "usage", None))
-        self._message(str(error))
+        self._message(
+            "No new answer was accepted. Confirmed groups and rejected sets are still saved. "
+            + str(error)
+            if self._awaiting_rethink
+            else str(error)
+        )
+        if self._awaiting_rethink:
+            self._render_results()
 
     @Slot()
     def _thread_finished(self):
@@ -614,20 +639,41 @@ class MainWindow(QMainWindow):
         while self.group_grid.count():
             item = self.group_grid.takeAt(0)
             if item.widget():
+                item.widget().hide()
                 item.widget().deleteLater()
 
     def _render_results(self):
         self._clear_cards()
         if self.solution:
+            position = 0
             for index, group in enumerate(self.solution.groups):
                 locked = any(set(group.words) == set(item.words) for item in self.locked)
+                if self._awaiting_rethink and not locked:
+                    continue
                 rejected = any(set(group.words) == set(item) for item in self.rejected)
-                card = GroupCard(group, index, locked, rejected)
+                card = GroupCard(
+                    group,
+                    index,
+                    locked,
+                    rejected,
+                    submitted=frozenset(group.words) in self._submitted_locks,
+                )
                 card.lock_changed.connect(self.toggle_lock)
                 card.reject_changed.connect(self.toggle_rejection)
-                self.group_grid.addWidget(card, index // 2, index % 2)
+                self.group_grid.addWidget(card, position // 2, position % 2)
+                position += 1
+            if self._awaiting_rethink:
+                placeholder = label(
+                    "Previous unconfirmed suggestions removed.\n"
+                    "New groups will appear here after a valid response.",
+                    "Message",
+                    wrap=True,
+                )
+                self.group_grid.addWidget(placeholder, (position + 1) // 2, 0, 1, 2)
             self.results_subtitle.setText(
-                "16 words, each used once. Confirm the hits. Rethink the near misses."
+                "Previous suggestions cleared · confirmed groups kept · feedback saved."
+                if self._awaiting_rethink
+                else "16 words, each used once. Confirm the hits. Rethink the near misses."
             )
         self._refresh()
         self._set_cards_enabled(not self.busy)
@@ -640,6 +686,7 @@ class MainWindow(QMainWindow):
         if self.busy or self.solution is None:
             return
         group = self.solution.groups[index]
+        self._submitted_locks.discard(frozenset(group.words))
         self.locked = [item for item in self.locked if set(item.words) != set(group.words)]
         if checked:
             self.locked.append(group.model_copy(deep=True))
@@ -664,6 +711,8 @@ class MainWindow(QMainWindow):
             return
         self.locked = []
         self.rejected = []
+        self._submitted_locks.clear()
+        # Do not resurrect rejected cards after a failed rethink.
         self._render_results()
         self._message("Feedback cleared. Your current suggestions are still here.")
 
@@ -696,7 +745,7 @@ class MainWindow(QMainWindow):
             self._refresh()
 
     def copy_answer(self):
-        if self.solution:
+        if self.solution and not self._awaiting_rethink and not self.busy:
             text = "\n\n".join(
                 f"{group.title}\n{', '.join(group.words)}\n{group.explanation}"
                 for group in self.solution.groups
@@ -705,7 +754,7 @@ class MainWindow(QMainWindow):
             self._message("Answer copied to the clipboard.")
 
     def export_answer(self):
-        if self.solution is None:
+        if self.solution is None or self._awaiting_rethink or self.busy:
             return
         filename, _ = QFileDialog.getSaveFileName(
             self, "Export suggestions", "connections.json", "JSON (*.json)"

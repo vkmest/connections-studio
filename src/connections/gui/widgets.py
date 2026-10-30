@@ -100,7 +100,9 @@ class GroupCard(QFrame):
     lock_changed = Signal(int, bool)
     reject_changed = Signal(int)
 
-    def __init__(self, group: Group, index: int, locked: bool, rejected: bool):
+    def __init__(
+        self, group: Group, index: int, locked: bool, rejected: bool, *, submitted: bool = False
+    ):
         super().__init__()
         self.setObjectName("GroupCard")
         self.setStyleSheet(
@@ -127,18 +129,33 @@ class GroupCard(QFrame):
         explanation.setStyleSheet("color:#62695F;font-size:12px;")
         layout.addWidget(explanation)
         layout.addStretch()
+        if submitted and locked:
+            status = QHBoxLayout()
+            status.addWidget(label("✓ Confirmed · kept", "ConfirmedStatus"))
+            self.undo_button = button("Undo confirmation", "Ghost")
+            self.undo_button.clicked.connect(lambda: self.lock_changed.emit(index, False))
+            status.addWidget(self.undo_button)
+            status.addStretch()
+            layout.addLayout(status)
         actions = QHBoxLayout()
-        self.lock_button = button("Confirmed" if locked else "Mark correct", "Small")
+        actions.setSpacing(8)
+        self.lock_button = button(
+            "✓ Correct" if locked and not submitted else "Correct", "FeedbackCorrect"
+        )
         self.lock_button.setCheckable(True)
-        self.lock_button.setChecked(locked)
-        self.lock_button.setEnabled(not rejected)
+        self.lock_button.setChecked(locked and not submitted)
+        self.lock_button.setEnabled(not rejected and not (submitted and locked))
         self.lock_button.setToolTip("Lock this group after the game accepts it.")
         self.lock_button.toggled.connect(lambda checked: self.lock_changed.emit(index, checked))
-        self.reject_button = button("Undo rejection" if rejected else "Not a match", "Ghost")
+        self.reject_button = button(
+            "✕ Not correct" if rejected else "Not correct", "FeedbackIncorrect"
+        )
+        self.reject_button.setCheckable(True)
+        self.reject_button.setChecked(rejected)
         self.reject_button.setEnabled(not locked)
         self.reject_button.setToolTip("Exclude these exact four words from the next solve.")
         self.reject_button.clicked.connect(lambda: self.reject_changed.emit(index))
         actions.addWidget(self.lock_button)
-        actions.addStretch()
         actions.addWidget(self.reject_button)
+        actions.addStretch()
         layout.addLayout(actions)

@@ -7,6 +7,7 @@ from PySide6.QtWidgets import QApplication
 
 from connections.config import Settings
 from connections.demo import DEMO_WORDS, demo_solution
+from connections.gui.widgets import GroupCard
 from connections.gui.window import MainWindow
 from connections.models import Usage
 from connections.service import OperationResult, ServiceError, SolverService
@@ -141,3 +142,94 @@ def test_invalid_environment_opens_recovery_ui_without_loading_credentials(qtbot
     assert window.service.settings.api_key == ""
     assert "CONNECTIONS_PROVIDER" in window.message_label.text()
     assert "Settings" in window.message_label.text()
+
+
+def test_rethink_consumes_feedback_and_never_displays_failed_old_suggestions(qtbot, monkeypatch):
+    from threading import Event
+
+    release = Event()
+    widget = window(qtbot)
+    widget.load_demo()
+    widget.start_solve()
+    widget.demo_mode = False
+    widget.toggle_lock(0, True)
+    widget.toggle_lock(1, True)
+    widget.toggle_rejection(2)
+    widget.toggle_rejection(3)
+    captured = []
+
+    def fail(request, *, fresh=False):
+        assert fresh
+        captured.append(request)
+        release.wait(timeout=3)
+        raise ServiceError("The answer repeated a rejected group.")
+
+    monkeypatch.setattr(widget.service, "solve", fail)
+    widget.start_solve()
+    try:
+        assert len(widget.findChildren(GroupCard)) >= 2
+        cards = [widget.group_grid.itemAt(i).widget() for i in range(widget.group_grid.count())]
+        cards = [card for card in cards if isinstance(card, GroupCard)]
+        assert len(cards) == 2
+        assert all(not card.lock_button.isChecked() for card in cards)
+        assert all(not card.reject_button.isChecked() for card in cards)
+    finally:
+        release.set()
+        qtbot.waitUntil(lambda: not widget.busy, timeout=5000)
+    assert len(captured[0].locked) == 2
+    assert len(captured[0].rejected) == 2
+    assert "No new answer" in widget.message_label.text()
+    assert "previous" in widget.results_subtitle.text().lower()
+    assert len(widget.locked) == 2 and len(widget.rejected) == 2
+    assert not widget.copy_button.isEnabled()
+    assert not widget.export_button.isEnabled()
+    card = widget.group_grid.itemAt(0).widget()
+    card.undo_button.click()
+    assert len(widget.locked) == 1
+    assert len(widget.rejected) == 2
+
+
+def test_successful_rethink_keeps_confirmations_and_resets_new_feedback(qtbot, monkeypatch):
+    widget = window(qtbot)
+    widget.load_demo()
+    widget.start_solve()
+    widget.demo_mode = False
+    widget.toggle_lock(0, True)
+    monkeypatch.setattr(
+        widget.service,
+        "solve",
+        lambda request, **options: OperationResult(demo_solution(), Usage()),
+    )
+    widget.start_solve()
+    qtbot.waitUntil(lambda: not widget.busy, timeout=5000)
+    assert len(widget.locked) == 1
+    assert widget.group_grid.count() == 4
+    for index in range(4):
+        card = widget.group_grid.itemAt(index).widget()
+        assert not card.lock_button.isChecked()
+        assert not card.reject_button.isChecked()
+    assert widget.copy_button.isEnabled()
+
+
+def test_feedback_buttons_are_adjacent_and_have_visible_exclusive_states(qtbot):
+    widget = window(qtbot)
+    widget.load_demo()
+    widget.start_solve()
+    card = widget.group_grid.itemAt(0).widget()
+    assert card.reject_button.isCheckable()
+    assert card.lock_button.objectName() == "FeedbackCorrect"
+    assert card.reject_button.objectName() == "FeedbackIncorrect"
+    widget.toggle_rejection(0)
+    card = widget.group_grid.itemAt(0).widget()
+    assert card.reject_button.isChecked()
+    assert not card.lock_button.isChecked()
+
+
+def test_replaced_cards_are_hidden_before_deferred_deletion(qtbot):
+    widget = window(qtbot)
+    widget.load_demo()
+    widget.start_solve()
+    old_card = widget.group_grid.itemAt(0).widget()
+    assert old_card.isVisible()
+    widget.toggle_lock(0, True)
+    assert not old_card.isVisible()

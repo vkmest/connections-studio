@@ -81,6 +81,41 @@ def test_invalid_partition_is_not_returned_or_cached():
     assert len(requests) == 2
 
 
+def test_confirmed_groups_are_merged_locally_and_only_remaining_words_are_requested():
+    confirmed = groups()[:2]
+    service, requests = make_service(
+        response_body({"groups": [g.model_dump() for g in groups()[2:]]})
+    )
+    result = service.solve(SolveRequest(words=WORDS, locked=confirmed))
+    assert result.value.groups == groups()
+    payload = json.loads(requests[0]["input"][0]["content"])
+    assert payload["words"] == WORDS[8:]
+    assert payload["group_count"] == 2
+    assert "locked" not in payload
+    schema = requests[0]["text"]["format"]["schema"]
+    assert schema["properties"]["groups"]["maxItems"] == 2
+
+
+def test_rejected_remaining_group_is_never_returned_or_cached():
+    service, requests = make_service(
+        response_body({"groups": [g.model_dump() for g in groups()[2:]]})
+    )
+    request = SolveRequest(words=WORDS, locked=groups()[:2], rejected=[groups()[2].words])
+    for _ in range(2):
+        with pytest.raises(ServiceError, match="rejected"):
+            service.solve(request)
+    assert len(requests) == 2
+
+
+def test_explicit_rethink_bypasses_identical_cached_answer():
+    service, requests = make_service(response_body({"groups": [g.model_dump() for g in groups()]}))
+    request = SolveRequest(words=WORDS)
+    service.solve(request)
+    result = service.solve(request, fresh=True)
+    assert not result.cached
+    assert len(requests) == 2
+
+
 @pytest.mark.parametrize(
     "status,code,match",
     [

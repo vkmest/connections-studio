@@ -43,10 +43,19 @@ returned group contains four distinct words. The answer must use every input
 exactly once. Locks cannot overlap; rejects exclude exact four-word sets regardless
 of category title. All constraint words must belong to the board.
 
-The model returns all groups including locks; the core validates them and restores
-locked labels/explanations. No partial or invalid answer reaches the UI. Word edits
+The model receives only unresolved words and applicable rejected sets. Its response
+schema requires exactly the remaining number of groups. The core merges confirmed
+groups locally, preserving their labels/explanations, then validates the full board.
+No partial or invalid answer reaches the UI. Word edits
 or image replacement clear stale results and feedback. All-confirmed puzzles return
 locally.
+
+Rethink consumes the displayed feedback selections but preserves the confirmed
+groups and rejected-set history as constraints. Confirmations get a separate kept
+label. Previous unresolved cards disappear before the request and stay hidden on
+failure; the UI explicitly says no new answer was accepted. Copy/export are disabled
+until a valid replacement arrives. Clear feedback removes constraints without
+resurrecting hidden old suggestions.
 
 ## API and usage
 
@@ -71,6 +80,7 @@ A service instance caches at most 24 successful typed results in memory, keyed b
 input/constraint hashes. Settings changes replace the service/cache. Cached returns
 have zero new usage. Screenshots are not automatically saved. Costs use reported
 token usage and reference rates; unknown usage/rates are marked incomplete.
+Explicit Rethink bypasses the solve cache; confirmed-only boards still finish locally.
 
 ## UI concurrency
 

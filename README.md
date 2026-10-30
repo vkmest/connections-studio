@@ -126,17 +126,25 @@ Official references: [API quickstart](https://developers.openai.com/api/docs/qui
    (or local Ollama). Cloud providers use API credits.
 5. Check all 16 words and correct any misread tile. Click **Find connections** for
    a separate, text-only solve request.
-6. Try a group in the game. If accepted, click **Mark correct**. If rejected, click
-   **Not a match**, then **Rethink remaining**. Locks stay together; rejected sets
+6. Try a group in the game. If accepted, click **Correct**. If rejected, click
+   **Not correct**, then **Rethink remaining**. Confirmed groups are kept locally;
+   only unresolved words are sent for another solve. Rejected sets
    cannot recur under a different title.
+
+Rethink resets the feedback button selections and removes old unresolved cards.
+Confirmed groups remain labeled as kept; rejection history remains active. If the
+provider fails or repeats a rejected set, the app shows an explicit failure state,
+not the previous answer. Clear feedback removes the saved constraints.
 
 You can type words directly or paste 16 entries separated by newlines, commas,
 semicolons or tabs. Spaces inside phrases are preserved. Editing a tile clears
 stale results and feedback; a new screenshot clears the old grid. Copy answers
 as text or export suggestions/feedback to JSON.
 
-Identical words, mode and feedback reuse the session cache. To change the search,
-add feedback or select Deeper under **Edit the words**. The offline example is
+Identical ordinary solve requests reuse the session cache. **Rethink remaining**
+explicitly requests a fresh response and can incur another cloud charge. Add
+feedback to rule out wrong sets, or select Deeper under **Edit the words**. A fresh
+request can still reach the same conclusion if you do not reject it. The offline example is
 predefined: it demonstrates the interface, not AI accuracy. Edit the board to
 leave demo mode and use the live solver.
 

@@ -41,6 +41,19 @@ QPushButton#Nav:checked { background: #E0DCE9; color: #59417E; font-weight: 650;
 QPushButton#Nav:hover { background: #E5E6DC; }
 QPushButton#Small { padding: 7px 11px; font-size: 12px; background: transparent; }
 QPushButton#Small:checked { background: #303848; color: white; border-color: #303848; }
+QPushButton#FeedbackCorrect, QPushButton#FeedbackIncorrect {
+    min-width: 100px; padding: 10px 14px; font-weight: 700; border-width: 2px;
+}
+QPushButton#FeedbackCorrect { background: #F2FAF3; color: #27643A; border-color: #8CB69A; }
+QPushButton#FeedbackCorrect:hover { background: #DDEFE1; }
+QPushButton#FeedbackCorrect:checked { background: #27643A; color: white; border-color: #27643A; }
+QPushButton#FeedbackIncorrect { background: #FFF5F3; color: #9A3732; border-color: #D9A19A; }
+QPushButton#FeedbackIncorrect:hover { background: #F9DFDA; }
+QPushButton#FeedbackIncorrect:checked { background: #A43D36; color: white; border-color: #A43D36; }
+QPushButton#FeedbackCorrect:disabled, QPushButton#FeedbackIncorrect:disabled {
+    background: #F0F1EB; color: #92988D; border-color: #DEE2D7;
+}
+QLabel#ConfirmedStatus { color: #27643A; font-weight: 700; font-size: 12px; }
 QLineEdit { border: 1px solid #DDE0D7; background: #FCFCF9; border-radius: 10px;
             padding: 10px; selection-background-color: #6950A1; }
 QLineEdit:focus { border: 2px solid #9277BC; background: #FFFFFF; }
