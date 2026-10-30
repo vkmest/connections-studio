@@ -1,0 +1,41 @@
+[build-system]
+requires = ["hatchling>=1.27,<2"]
+build-backend = "hatchling.build"
+
+[project]
+name = "connections-studio"
+version = "1.0.0"
+description = "A clipboard-first Connections puzzle companion, for desktop and terminal."
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+dependencies = [
+  "openai>=2.0,<3",
+  "pydantic>=2.10,<3",
+  "Pillow>=11.1,<13",
+  "python-dotenv>=1.0,<2",
+]
+
+[project.optional-dependencies]
+desktop = ["PySide6-Essentials>=6.8,<7"]
+dev = ["pytest>=8,<10", "pytest-qt>=4.4,<5", "ruff>=0.11,<1", "build>=1.2,<2"]
+
+[project.scripts]
+connections = "connections.cli:main"
+
+[project.gui-scripts]
+connections-studio = "connections.gui.app:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/connections"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
