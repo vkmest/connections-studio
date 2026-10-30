@@ -594,6 +594,9 @@ class MainWindow(QMainWindow):
         self._message(
             "Reading the grid… This can take a moment."
             if operation == "extract"
+            else "Comparing every allowed split of the last eight words… "
+            "Rejected and previous arrangements have been removed."
+            if len(self.locked) == 2
             else "Looking for connections… Checking meanings and wordplay."
         )
         self._refresh()

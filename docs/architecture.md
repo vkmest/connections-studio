@@ -24,6 +24,7 @@ flowchart LR
 | `images.py` | Decode, orient, flatten, resize and strip image metadata |
 | `service.py` | OpenAI Responses, Kimi/DeepSeek chat, local Ollama, validation, cache and usage |
 | `structured_output.py` | Concrete JSON examples and conservative JSON-mode parsing |
+| `search.py` | Final-eight partition enumeration and feedback/history filtering |
 | `cli.py` | Arguments, text/JSON, exit codes and desktop dispatch |
 | `demo.py` | Original offline sample, independent of live API behavior |
 | `gui/window.py` | Workflow, puzzle state, feedback and worker lifecycle |
@@ -69,6 +70,21 @@ set that has already been tried/rejected cannot be rearranged without unlocking 
 confirmation, so that case errors before network work. History is included in
 explicit exports and cleared on a new board or Clear feedback. It is not persisted
 automatically. Historical groups also affect the ordinary solve cache key.
+
+With exactly two confirmed groups, `remaining_options` anchors the first remaining
+word and chooses three companions: C(7,3) = 35 unordered partitions. Any partition
+containing a rejected set or matching prior unresolved membership is removed.
+The model receives the surviving numbered options and returns an enum-constrained
+`option_id`. The options use zero-based indexes into a single words array, avoiding
+repeated long tile text and keeping local context use bounded. It also returns
+exactly two `Category` descriptions in option order. Descriptions
+contain no word lists; the service constructs `Group` objects from the selected
+local option and performs full board/feedback validation. The same selection
+schema works with Responses, JSON-mode chat and local Ollama. Invalid IDs or
+malformed descriptions fail validation; an empty pool fails before network work.
+This search constrains membership, not semantic correctness. The normal generator
+remains in use with 4, 12 or 16 unresolved words. Only the selected partition
+enters attempt history; other enumerated options remain available.
 
 ## API and usage
 

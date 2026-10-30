@@ -18,6 +18,18 @@ def json_format_instructions(schema: type[BaseModel]) -> str:
     definition = schema.model_json_schema()
     if schema is Extraction:
         example = {"words": [f"EXAMPLE_WORD_{i:02}" for i in range(1, 17)], "warning": ""}
+    elif "option_id" in definition["properties"]:
+        example = {
+            "option_id": 0,
+            "categories": [
+                {
+                    "title": f"Category {index + 1}",
+                    "explanation": "A brief explanation of this group's connection.",
+                    "confidence": "medium",
+                }
+                for index in range(2)
+            ],
+        }
     else:
         count = definition["properties"]["groups"]["minItems"]
         example = {
@@ -67,6 +79,8 @@ def parse_json_answer(schema: type[T], content: str | None) -> T:
     except ValidationError:
         if schema is Extraction:
             expected = "Expected a words array and warning text."
+        elif "option_id" in schema.model_fields:
+            expected = "Expected one supplied option_id and exactly two category descriptions."
         else:
             count = schema.model_json_schema()["properties"]["groups"]["minItems"]
             expected = (

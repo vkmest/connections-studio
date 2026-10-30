@@ -25,9 +25,8 @@ class StrictModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
-class Group(StrictModel):
+class Category(StrictModel):
     title: str = Field(min_length=1, max_length=100)
-    words: list[str] = Field(min_length=4, max_length=4)
     explanation: str = Field(min_length=1, max_length=500)
     confidence: Literal["high", "medium", "low"]
 
@@ -38,6 +37,10 @@ class Group(StrictModel):
         if not value:
             raise ValueError("Category titles and explanations cannot be blank.")
         return value
+
+
+class Group(Category):
+    words: list[str] = Field(min_length=4, max_length=4)
 
     @field_validator("words")
     @classmethod

@@ -9,6 +9,7 @@ from test_models import WORDS, groups
 from connections.config import Settings
 from connections.images import prepare_image
 from connections.models import SolveRequest
+from connections.providers import PROVIDERS
 from connections.service import ServiceError, SolverService
 
 
@@ -42,8 +43,6 @@ def test_cloud_chat_uses_own_key_and_validated_json(provider, host, mode):
                 "usage": {"prompt_tokens": 100, "completion_tokens": 200, "total_tokens": 300},
             },
         )
-
-    from connections.providers import PROVIDERS
 
     client = OpenAI(
         api_key=settings.api_key,
@@ -145,7 +144,7 @@ def test_extended_local_budget_has_enough_context_and_longer_request_timeout():
     assert all(request.extensions["timeout"]["read"] == 300 for request in requests)
 
 
-def chat_service(content):
+def chat_service(content, provider="deepseek"):
     requests = []
 
     def handle(request):
@@ -170,13 +169,11 @@ def chat_service(content):
 
     client = OpenAI(
         api_key="dummy-only",
-        base_url="https://api.deepseek.com",
+        base_url=PROVIDERS[provider].base_url,
         max_retries=0,
         http_client=httpx.Client(transport=httpx.MockTransport(handle)),
     )
-    return SolverService(
-        Settings(provider="deepseek", api_key="dummy-only"), client=client
-    ), requests
+    return SolverService(Settings(provider=provider, api_key="dummy-only"), client=client), requests
 
 
 @pytest.mark.parametrize(
@@ -212,3 +209,58 @@ def test_fenced_json_does_not_bypass_puzzle_validation():
     service, _ = chat_service("```json\n" + json.dumps(payload) + "\n```")
     with pytest.raises(ServiceError, match="exactly once"):
         service.solve(SolveRequest(words=WORDS))
+
+
+@pytest.mark.parametrize("provider", ["deepseek", "kimi"])
+def test_final_eight_chat_selection_uses_only_legal_word_splits(provider):
+    content = json.dumps(
+        {
+            "option_id": 0,
+            "categories": [group.model_dump(exclude={"words"}) for group in groups()[2:]],
+        }
+    )
+    service, requests = chat_service(content, provider)
+    request = SolveRequest(words=WORDS, locked=groups()[:2], rejected=[groups()[2].words])
+    result = service.solve(request)
+    result.value.validate_for(request)
+    body = json.loads(requests[0].content)
+    payload = json.loads(body["messages"][1]["content"])
+    assert len(payload["options"]) == 34
+    assert result.value.groups[2].words == [
+        payload["words"][index] for index in payload["options"][0]["groups"][0]
+    ]
+    assert "Example JSON" in body["messages"][0]["content"]
+
+
+def test_local_final_eight_selection_still_has_no_cloud_key():
+    requests = []
+
+    def handle(request):
+        requests.append(request)
+        if request.url.path == "/api/show":
+            return httpx.Response(200, json={"details": {"format": "gguf"}})
+        return httpx.Response(
+            200,
+            json={
+                "done": True,
+                "done_reason": "stop",
+                "message": {
+                    "content": json.dumps(
+                        {
+                            "option_id": 0,
+                            "categories": [
+                                group.model_dump(exclude={"words"}) for group in groups()[2:]
+                            ],
+                        }
+                    )
+                },
+            },
+        )
+
+    service = SolverService(
+        Settings(provider="ollama"),
+        local_client=httpx.Client(transport=httpx.MockTransport(handle)),
+    )
+    result = service.solve(SolveRequest(words=WORDS, locked=groups()[:2]))
+    assert result.value.groups == groups()
+    assert all("authorization" not in request.headers for request in requests)

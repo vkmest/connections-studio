@@ -4,7 +4,7 @@ Verified locally on Windows, Python 3.13.2, October 30, 2026.
 
 ## Automated checks
 
-- **91 tests pass**: board normalization, duplicate/blank rejection, full partition
+- **100 tests pass**: board normalization, duplicate/blank rejection, full partition
   integrity, locks/rejected sets, safe image handling, service caching/costs,
   typed output via the real SDK, API error/refusal/incomplete responses, explicit
   reasoning/token settings, CLI output and desktop state/lifecycle. Provider tests
@@ -29,6 +29,13 @@ Verified locally on Windows, Python 3.13.2, October 30, 2026.
   preserved and no retries, whole code-fence unwrapping without bypassing puzzle
   validation, examples valid for extraction/full/remaining schemas, and refusal
   to search surrounding prose for embedded JSON.
+  Final-eight search tests cover all 35 unique complete partitions, exclusion of
+  rejections/history, empty candidate pools, invalid selection IDs, exact-count
+  category selection via all four provider boundaries, and no paid request when
+  no options remain. These checks establish membership handling, not category
+  quality or the accuracy of a live model's ranking.
+  Long-tile regression verifies options reference word indexes rather than
+  repeating full tile text in every candidate, bounding the local prompt size.
 - Ruff lint and format checks pass.
 - Wheel and source distribution build successfully. Their contents were checked
   for required source and absence of `.env` / virtual environments.

@@ -145,6 +145,16 @@ Clear feedback or a new board resets this in-memory search history. Additional
 history increases input tokens. If only four previously tried words remain, undo
 a confirmation before asking for a different arrangement; no paid request is sent.
 
+**When eight words remain**, Python enumerates all 35 distinct ways to split them
+into two groups. It removes rejected sets and previous arrangements before sending
+the surviving options to the model. The model chooses an allowed option and names
+its two categories; the app supplies the words directly from that option. This
+prevents repeated forbidden groupings without another API retry. It still depends
+on the model to judge the connections, so the answer can be wrong. If every option
+is excluded, the app asks you to review feedback without making a paid request.
+The option list adds input tokens. Larger unresolved boards use the ordinary
+model-generated grouping workflow.
+
 You can type words directly or paste 16 entries separated by newlines, commas,
 semicolons or tabs. Spaces inside phrases are preserved. Editing a tile clears
 stale results and feedback; a new screenshot clears the old grid. Copy answers

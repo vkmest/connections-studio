@@ -84,7 +84,9 @@ def test_invalid_partition_is_not_returned_or_cached():
 def test_confirmed_groups_are_merged_locally_and_only_remaining_words_are_requested():
     confirmed = groups()[:2]
     service, requests = make_service(
-        response_body({"groups": [g.model_dump() for g in groups()[2:]]})
+        response_body(
+            {"option_id": 0, "categories": [g.model_dump(exclude={"words"}) for g in groups()[2:]]}
+        )
     )
     result = service.solve(SolveRequest(words=WORDS, locked=confirmed))
     assert result.value.groups == groups()
@@ -92,19 +94,71 @@ def test_confirmed_groups_are_merged_locally_and_only_remaining_words_are_reques
     assert payload["words"] == WORDS[8:]
     assert payload["group_count"] == 2
     assert "locked" not in payload
+    assert len(payload["options"]) == 35
+    assert payload["options"][0]["groups"] == [[0, 1, 2, 3], [4, 5, 6, 7]]
     schema = requests[0]["text"]["format"]["schema"]
-    assert schema["properties"]["groups"]["maxItems"] == 2
+    assert schema["properties"]["categories"]["maxItems"] == 2
 
 
-def test_rejected_remaining_group_is_never_returned_or_cached():
+def test_rejected_remaining_group_is_excluded_from_model_options():
     service, requests = make_service(
-        response_body({"groups": [g.model_dump() for g in groups()[2:]]})
+        response_body(
+            {"option_id": 0, "categories": [g.model_dump(exclude={"words"}) for g in groups()[2:]]}
+        )
     )
     request = SolveRequest(words=WORDS, locked=groups()[:2], rejected=[groups()[2].words])
-    for _ in range(2):
-        with pytest.raises(ServiceError, match="rejected"):
-            service.solve(request)
-    assert len(requests) == 2
+    result = service.solve(request)
+    result.value.validate_for(request)
+    assert result.value.groups[2].words != groups()[2].words
+    payload = json.loads(requests[0]["input"][0]["content"])
+    assert len(payload["options"]) == 34
+    assert all(
+        {payload["words"][index] for index in words} != set(groups()[2].words)
+        for option in payload["options"]
+        for words in option["groups"]
+    )
+
+
+def test_model_cannot_select_an_option_outside_the_allowed_list():
+    service, requests = make_service(
+        response_body(
+            {"option_id": 99, "categories": [g.model_dump(exclude={"words"}) for g in groups()[2:]]}
+        )
+    )
+    with pytest.raises(ServiceError):
+        service.solve(SolveRequest(words=WORDS, locked=groups()[:2]))
+    assert len(requests) == 1
+
+
+def test_no_remaining_options_makes_no_paid_request(monkeypatch):
+    monkeypatch.setattr("connections.service.remaining_options", lambda request: [])
+    service, requests = make_service({})
+    with pytest.raises(ServiceError, match="All 35 splits"):
+        service.solve(SolveRequest(words=WORDS, locked=groups()[:2]))
+    assert not requests
+
+
+def test_final_eight_long_tiles_are_sent_once_not_repeated_in_every_option():
+    words = WORDS[:8] + ["X" * 78 + f"{index:02}" for index in range(8)]
+    service, requests = make_service(
+        response_body(
+            {
+                "option_id": 0,
+                "categories": [group.model_dump(exclude={"words"}) for group in groups()[2:]],
+            }
+        )
+    )
+    request = SolveRequest(words=words, locked=groups()[:2])
+    service.solve(request).value.validate_for(request)
+    content = requests[0]["input"][0]["content"]
+    assert all(content.count(word) == 1 for word in words[8:])
+    payload = json.loads(content)
+    assert all(
+        isinstance(index, int)
+        for option in payload["options"]
+        for group in option["groups"]
+        for index in group
+    )
 
 
 def test_explicit_rethink_bypasses_identical_cached_answer():
