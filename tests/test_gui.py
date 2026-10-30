@@ -9,7 +9,7 @@ from connections.config import Settings
 from connections.demo import DEMO_WORDS, demo_solution
 from connections.gui.widgets import GroupCard
 from connections.gui.window import MainWindow
-from connections.models import Usage
+from connections.models import SolveRequest, Usage
 from connections.service import OperationResult, ServiceError, SolverService
 
 
@@ -80,7 +80,8 @@ def test_background_error_restores_controls(qtbot, monkeypatch):
     qtbot.waitUntil(lambda: not widget.busy, timeout=5000)
     assert "Test network failure" in widget.message_label.text()
     assert widget.solve_button.isEnabled()
-    assert widget.solution is None
+    assert widget.random_fallback
+    widget.solution.validate_for(SolveRequest(words=DEMO_WORDS))
 
 
 def test_background_success_displays_solution(qtbot, monkeypatch):
@@ -181,11 +182,12 @@ def test_rethink_consumes_feedback_and_never_displays_failed_old_suggestions(qtb
         qtbot.waitUntil(lambda: not widget.busy, timeout=5000)
     assert len(captured[0].locked) == 2
     assert len(captured[0].rejected) == 2
-    assert "No new answer" in widget.message_label.text()
-    assert "previous" in widget.results_subtitle.text().lower()
+    assert "Random test arrangement" in widget.message_label.text()
+    assert "Random" in widget.results_subtitle.text()
+    widget.solution.validate_for(captured[0])
     assert len(widget.locked) == 2 and len(widget.rejected) == 2
-    assert not widget.copy_button.isEnabled()
-    assert not widget.export_button.isEnabled()
+    assert widget.copy_button.isEnabled()
+    assert widget.export_button.isEnabled()
     card = widget.group_grid.itemAt(0).widget()
     card.undo_button.click()
     assert len(widget.locked) == 1
@@ -297,13 +299,15 @@ def test_capture_popup_requires_explicit_read_and_busy_dialog_is_centered(qtbot,
         assert (widget.busy_dialog.geometry().center() - center).manhattanLength() <= 3
         assert not widget.message_label.isVisible()
         widget.busy_dialog.reject()
-        assert widget.busy_dialog.isVisible()
+        assert not widget.busy_dialog.isVisible()
+        assert not widget.busy
     finally:
         release.set()
-        qtbot.waitUntil(lambda: not widget.busy, timeout=5000)
+        qtbot.waitUntil(lambda: not widget._jobs, timeout=5000)
     assert len(calls) == 1
     assert not widget.busy_dialog.isVisible()
-    assert "Test read failure" in widget.message_label.text()
+    assert "Stopped waiting" in widget.message_label.text()
+    assert "Test read failure" not in widget.message_label.text()
 
 
 def test_completed_puzzle_has_new_puzzle_action_that_returns_home(qtbot, monkeypatch):
@@ -353,11 +357,138 @@ def test_rethink_includes_history_and_remembers_refused_attempts(qtbot, monkeypa
     widget.start_solve()
     qtbot.waitUntil(lambda: not widget.busy, timeout=5000)
     assert captured[0].previous_attempts == [old]
+    fallback = widget.solution.model_copy(deep=True)
     widget.start_solve()
     qtbot.waitUntil(lambda: not widget.busy, timeout=5000)
-    assert captured[1].previous_attempts == [old, changed]
+    assert captured[1].previous_attempts == [old, changed, fallback]
     widget.clear_feedback.click()
     assert widget.attempt_history == []
     assert not widget.clear_feedback.isEnabled()
     widget.set_words(DEMO_WORDS)
     assert widget.attempt_history == []
+
+
+def test_stop_waiting_is_immediate_and_late_response_cannot_overwrite_fallback(qtbot, monkeypatch):
+    from threading import Event
+
+    release = Event()
+    widget = window(qtbot)
+    widget.set_words(DEMO_WORDS)
+
+    def slow(request):
+        release.wait(timeout=3)
+        return OperationResult(demo_solution(), Usage())
+
+    monkeypatch.setattr(widget.service, "solve", slow)
+    widget.start_solve()
+    try:
+        widget.busy_dialog.cancel_button.click()
+        assert not widget.busy and not widget.busy_dialog.isVisible()
+        assert widget.random_fallback
+        fallback = widget.solution.model_dump()
+        assert "Random" in widget.results_subtitle.text()
+        assert widget.solve_button.isEnabled()
+    finally:
+        release.set()
+        qtbot.waitUntil(lambda: not widget._jobs, timeout=5000)
+    assert widget.solution.model_dump() == fallback
+
+
+def test_cancelled_operation_cannot_clear_busy_state_of_a_new_request(qtbot, monkeypatch):
+    from threading import Event
+
+    first = Event()
+    second = Event()
+    widget = window(qtbot)
+    widget.set_words(DEMO_WORDS)
+
+    def old(request):
+        first.wait(timeout=3)
+        return OperationResult(demo_solution(), Usage())
+
+    def current(request, **options):
+        second.wait(timeout=3)
+        return OperationResult(demo_solution(), Usage())
+
+    monkeypatch.setattr(widget.service, "solve", old)
+    widget.start_solve()
+    widget.cancel_operation()
+    monkeypatch.setattr(widget.service, "solve", current)
+    widget.start_solve()
+    try:
+        first.set()
+        qtbot.waitUntil(lambda: len(widget._jobs) == 1, timeout=5000)
+        assert widget.busy and widget.busy_dialog.isVisible()
+    finally:
+        first.set()
+        second.set()
+        qtbot.waitUntil(lambda: not widget._jobs, timeout=5000)
+    assert not widget.busy and not widget.random_fallback
+
+
+def test_window_can_close_after_stopping_without_waiting_for_provider(qtbot, monkeypatch):
+    from threading import Event
+
+    release = Event()
+    widget = window(qtbot)
+    widget.set_words(DEMO_WORDS)
+
+    def slow(request):
+        release.wait(timeout=3)
+        return OperationResult(demo_solution(), Usage())
+
+    monkeypatch.setattr(widget.service, "solve", slow)
+    widget.start_solve()
+    widget.cancel_operation()
+    try:
+        assert widget.close()
+        assert not widget.isVisible()
+    finally:
+        release.set()
+        qtbot.waitUntil(lambda: not widget._jobs, timeout=5000)
+
+
+def test_failed_extraction_never_randomly_fills_unread_words(qtbot, monkeypatch):
+    widget = window(qtbot)
+    stream = io.BytesIO()
+    Image.new("RGB", (300, 300), "white").save(stream, "PNG")
+    widget.set_image(stream.getvalue())
+
+    def fail(image):
+        raise ServiceError("Image could not be read")
+
+    monkeypatch.setattr(widget.service, "extract", fail)
+    widget.start_extract()
+    qtbot.waitUntil(lambda: not widget.busy, timeout=5000)
+    assert widget.solution is None and not widget.random_fallback
+    assert all(not field.text() for field in widget.word_inputs)
+    assert "Image could not be read" in widget.message_label.text()
+
+
+def test_cancel_after_worker_finishes_before_queued_signals_closes_retired_client_once(
+    qtbot, monkeypatch
+):
+    widget = window(qtbot)
+    widget.set_words(DEMO_WORDS)
+    retired = widget.service
+    closed = []
+    monkeypatch.setattr(retired, "close", lambda: closed.append(True))
+    monkeypatch.setattr(retired, "solve", lambda request: OperationResult(demo_solution(), Usage()))
+    widget.start_solve()
+    widget._thread.join(timeout=2)
+    assert widget.busy
+    widget.cancel_operation()
+    qtbot.waitUntil(lambda: not widget._jobs, timeout=5000)
+    assert closed == [True]
+
+
+def test_cancel_before_worker_starts_makes_no_provider_call(qtbot):
+    from connections.gui.worker import Worker
+
+    calls = []
+    service = SolverService(Settings())
+    worker = Worker(lambda: calls.append(True), service)
+    worker.cancel()
+    worker.thread.start()
+    worker.thread.join(timeout=2)
+    assert not calls

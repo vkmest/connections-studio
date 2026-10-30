@@ -74,6 +74,10 @@ def main():
     app.processEvents()
     window.busy_dialog.grab().save(str(output / "loading.png"))
     window.busy_dialog.hide()
+    window.set_words(DEMO_WORDS)
+    window._show_random_fallback("Example of the local fallback; no model request was made.")
+    app.processEvents()
+    window.grab().save(str(output / "random-fallback.png"))
     window.close()
 
     sample = Image.new("RGB", (840, 560), "#FAFAF6")

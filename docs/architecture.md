@@ -25,6 +25,7 @@ flowchart LR
 | `service.py` | OpenAI Responses, Kimi/DeepSeek chat, local Ollama, validation, cache and usage |
 | `structured_output.py` | Concrete JSON examples and conservative JSON-mode parsing |
 | `search.py` | Final-eight partition enumeration and feedback/history filtering |
+| `fallback.py` | Feedback-respecting random test arrangements without model/category claims |
 | `cli.py` | Arguments, text/JSON, exit codes and desktop dispatch |
 | `demo.py` | Original offline sample, independent of live API behavior |
 | `gui/window.py` | Workflow, puzzle state, feedback and worker lifecycle |
@@ -55,9 +56,11 @@ locally.
 
 Rethink consumes the displayed feedback selections but preserves the confirmed
 groups and rejected-set history as constraints. Confirmations get a separate kept
-label. Previous unresolved cards disappear before the request and stay hidden on
-failure; the UI explicitly says no new answer was accepted. Copy/export are disabled
-until a valid replacement arrives. Clear feedback removes constraints without
+label. Previous unresolved cards disappear before the request. On solve failure,
+the desktop can replace them with explicitly labeled random test groups that
+respect the same constraints; these are not model/category evidence. If no legal
+fallback is found, old cards remain hidden and copy/export remain disabled.
+Clear feedback removes constraints without
 resurrecting hidden old suggestions.
 
 `SolveRequest.previous_attempts` holds up to 32 complete, board-validated solutions.
@@ -121,20 +124,35 @@ Explicit Rethink bypasses the solve cache; confirmed-only boards still finish lo
 
 ## UI concurrency
 
-One Worker lives on a QThread per operation. The main thread owns widget state.
-Puzzle/settings controls are disabled during work. Workers emit data/errors by
-signals. Closing is deferred while busy, preventing destruction of a running
-thread. Errors preserve the puzzle. Qt handles high-DPI scaling; small windows
-scroll vertically.
+Provider calls run on Python daemon threads. Each Worker is a QObject created on
+the main thread and emits queued signals to the window; only the main thread
+touches widgets. A job registry retains workers until completion. Stop waiting
+marks the job canceled, retires its service/client/cache, installs an independent
+service, and restores controls immediately. Result and completion handlers check
+worker identity so a retired job cannot alter newer work. Retired clients close
+after their operation completes; an Event/Lock guard handles cancellation racing
+with already-completed queued signals and guarantees one cleanup attempt. Late
+signals are safe if Qt has shut down. Closing while actively waiting is deferred;
+after stopping, daemon requests do not prevent app exit. Server computation and
+billing may continue. Qt handles high-DPI scaling; small windows scroll vertically.
 
 The desktop defaults to Extended; CLI/core defaults remain Budget. A pasted image
 opens a centered prompt; only its Read action starts extraction. Loading uses a
-nonblocking window-modal dialog while the QThread works. It ignores Escape/close
-because those actions cannot cancel an already-sent request, and hides when the
-thread finishes. Both popups recenter when their parent moves/resizes. Theme and
+nonblocking window-modal dialog while the worker runs. Stop waiting, Escape and
+close request local cancellation; they do not promise server-side cancellation.
+Both popups recenter when their parent moves/resizes. Theme and
 sidebar state live in a separate, nonsecret `appearance.json`; provider Settings
 cannot overwrite them. The results action becomes New puzzle after all groups
 are confirmed, clearing puzzle state without a discard confirmation in that case.
+
+Random fallback uses the final-eight enumerator when applicable; otherwise it
+tries at most 256 local shuffles. Every candidate is fully validated against the
+board, confirmations, rejections and history. No words are fabricated and confirmed
+groups keep their labels. Unresolved groups use explicit Random test titles and
+unscored UI labels, not invented semantic explanations. Copied text and JSON
+exports identify random origin. A missing fallback is not proof that a 12/16-word
+board has no solution; the bounded local sampling may simply find none. Only solve
+failure/cancellation triggers fallback; extraction errors do not guess unseen words.
 
 ## Privacy boundary
 

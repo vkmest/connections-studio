@@ -141,8 +141,21 @@ the top-right Light mode/Dark mode button switches appearance.
 
 Rethink resets the feedback button selections and removes old unresolved cards.
 Confirmed groups remain labeled as kept; rejection history remains active. If the
-provider fails or repeats a rejected set, the app shows an explicit failure state,
-not the previous answer. Clear feedback removes the saved constraints.
+provider fails or repeats a rejected set, the app shows a **Random test arrangement**
+when it can generate one that respects the saved feedback. These are guesses,
+not identified categories or model recommendations. Test a group in the game,
+then mark Correct/Not correct to guide the next rethink. Random arrangements
+enter search history and cost nothing to generate. If no untried arrangement
+meets the feedback, the app asks you to review it instead of repeating an excluded
+set. Clear feedback removes the saved constraints and history.
+
+Click **Stop waiting**, press Escape or close the loading popup to return to the
+app immediately. A stopped solve can also produce a random fallback. Late results
+cannot overwrite the puzzle or a newer request. The provider may still process
+and bill an already-sent request; this is local cancellation, not a guarantee of
+server-side cancellation. You can close the app after stopping. Extraction failures
+do not invent words: review the image or enter the tiles manually. Random fallback
+is a desktop feature; CLI errors retain their normal exit codes.
 
 Each rethink also sends the last 32 distinct arrangements tried for this puzzle,
 including structurally valid answers refused for violating feedback. Confirmed
@@ -318,7 +331,7 @@ CLI feedback editing is not implemented; use the desktop to lock/reject groups.
 | Token budget exhausted | Review words/feedback; Extended allows 16,000 tokens and can cost more. |
 | Wrong/missing words | Crop a sharper grid or edit tiles manually. |
 | Clipboard has no image | Capture to clipboard or use Open image. |
-| Window won't close yet | A request is running (90-second cloud / 180-second local; Extended uses 300 seconds); let it finish. |
+| Window won't close yet | Click Stop waiting first, then close. Already-sent requests may still be billed. |
 | Cannot reach Ollama | Start Ollama; run `ollama pull qwen3-vl:4b`; check the selected model. |
 | OS credential store locked | Unlock the keychain, or leave Remember unchecked for a session-only key. |
 | Desktop support missing | Run `python -m pip install -e ".[desktop]"`. |

@@ -49,6 +49,8 @@ class CapturePrompt(CenteredDialog):
 
 
 class BusyDialog(CenteredDialog):
+    cancel_requested = Signal()
+
     def __init__(self, parent):
         super().__init__(parent)
         self.setWindowTitle("Working on your puzzle")
@@ -67,10 +69,16 @@ class BusyDialog(CenteredDialog):
         layout.addWidget(self.progress)
         self.note = label("", "Muted", wrap=True)
         layout.addWidget(self.note)
+        self.cancel_button = button("Stop waiting", "Ghost", self.cancel_requested.emit)
+        self.cancel_button.setToolTip(
+            "Return to the app and ignore the late answer. "
+            "Provider computation/billing may continue."
+        )
+        layout.addWidget(self.cancel_button)
 
     def reject(self):
-        # Escape must not imply a network request has been cancelled.
-        pass
+        self.cancel_requested.emit()
 
     def closeEvent(self, event):
-        event.ignore()
+        self.cancel_requested.emit()
+        event.accept()

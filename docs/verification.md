@@ -4,7 +4,7 @@ Verified locally on Windows, Python 3.13.2, October 31, 2026.
 
 ## Automated checks
 
-- **108 tests pass**: board normalization, duplicate/blank rejection, full partition
+- **117 tests pass**: board normalization, duplicate/blank rejection, full partition
   integrity, locks/rejected sets, safe image handling, service caching/costs,
   typed output via the real SDK, API error/refusal/incomplete responses, explicit
   reasoning/token settings, CLI output and desktop state/lifecycle. Provider tests
@@ -40,6 +40,11 @@ Verified locally on Windows, Python 3.13.2, October 31, 2026.
   popup, centered loading and failure recovery, Extended desktop default, theme
   persistence independent of provider settings, safe appearance defaults and
   completed-puzzle reset directly from the results action.
+  Cancellation regressions cover immediate return to controls, ignored late
+  results, overlapping old/new completion, window close after stopping and the
+  completed-before-queued-signal cleanup race. Random fallback tests cover complete
+  word usage, preserved locks, exclusions/history, exhausted final-four constraints,
+  clear random-origin labeling and no invented words after extraction failure.
 - Ruff lint and format checks pass.
 - Wheel and source distribution build successfully. Their contents were checked
   for required source and absence of `.env` / virtual environments.
@@ -62,8 +67,9 @@ Verified locally on Windows, Python 3.13.2, October 31, 2026.
   native window transitions to all four category cards and feedback controls.
 - Image clipboard paste is exercised against the real QApplication clipboard in
   tests. It creates a preview without triggering API work.
-- Background success/failure and close-during-request behavior are tested with
-  actual QThreads. Only the external service operation is replaced.
+- Background success/failure, cancellation and close-during-request behavior are
+  tested with actual daemon request threads and queued Qt signals. Only the
+  external service operation is replaced.
 - Automated Qt tests default to the offscreen platform, keeping them independent
   of native accessibility inspectors and desktop focus. Native UI verification is
   performed separately. A Windows COM diagnostic during a visible test run led

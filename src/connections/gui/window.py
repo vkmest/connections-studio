@@ -3,7 +3,7 @@
 import json
 from pathlib import Path
 
-from PySide6.QtCore import QBuffer, QEvent, QIODevice, Qt, QThread, Slot
+from PySide6.QtCore import QBuffer, QEvent, QIODevice, Qt, Slot
 from PySide6.QtGui import QCloseEvent, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QApplication,
@@ -25,6 +25,7 @@ from PySide6.QtWidgets import (
 from connections.cli import parse_word_text
 from connections.config import Settings
 from connections.demo import DEMO_WORDS, demo_solution
+from connections.fallback import random_solution
 from connections.gui.dialogs import BusyDialog, CapturePrompt
 from connections.gui.settings_dialog import SettingsDialog
 from connections.gui.theme import palette_for, style_for
@@ -41,6 +42,12 @@ from connections.models import Group, Solution, SolveRequest, validate_words
 from connections.preferences import load_appearance, save_appearance
 from connections.providers import PROVIDERS
 from connections.service import OperationResult, SolverService
+
+RESULTS_NOTE = (
+    "Suggestions, not certainties. Confidence is the model's own assessment, "
+    "not a measured probability. Colors distinguish groups; "
+    "they do not predict the game's difficulty colors."
+)
 
 
 class MainWindow(QMainWindow):
@@ -70,11 +77,13 @@ class MainWindow(QMainWindow):
         self._awaiting_rethink = False
         self._submitted_locks: set[frozenset[str]] = set()
         self.demo_mode = False
+        self.random_fallback = False
         self.busy = False
         self.session_cost = 0.0
         self.cost_incomplete = False
-        self._thread: QThread | None = None
+        self._thread = None
         self._worker: Worker | None = None
+        self._jobs: set[Worker] = set()
         self._operation = ""
         self.setWindowTitle("Connections Studio")
         self.resize(1320, 900)
@@ -84,6 +93,7 @@ class MainWindow(QMainWindow):
         self.capture_prompt = CapturePrompt(self)
         self.capture_prompt.read_requested.connect(self.start_extract)
         self.busy_dialog = BusyDialog(self)
+        self.busy_dialog.cancel_requested.connect(self.cancel_operation)
         self.apply_theme(self.theme, persist=False)
         self.set_sidebar_collapsed(appearance["sidebar_collapsed"], persist=False)
         self.mode.currentIndexChanged.connect(self._refresh)
@@ -327,15 +337,8 @@ class MainWindow(QMainWindow):
         self.retry_button = button("Rethink remaining  →", "Primary", self.results_action)
         bottom.addWidget(self.retry_button)
         layout.addLayout(bottom)
-        layout.addWidget(
-            label(
-                "Suggestions, not certainties. Confidence is the model's own assessment, "
-                "not a measured probability. Colors distinguish groups; "
-                "they do not predict the game's difficulty colors.",
-                "Muted",
-                wrap=True,
-            )
-        )
+        self.results_disclaimer = label(RESULTS_NOTE, "Muted", wrap=True)
+        layout.addWidget(self.results_disclaimer)
         layout.addStretch()
         return page
 
@@ -393,6 +396,12 @@ class MainWindow(QMainWindow):
                 dialog.recenter()
 
     def _refresh(self):
+        self.results_disclaimer.setText(
+            "Random guesses have no category evidence or model confidence. "
+            "Only mark a group Correct after the game accepts it."
+            if self.random_fallback
+            else RESULTS_NOTE
+        )
         words = [entry.text() for entry in self.word_inputs]
         count = sum(bool(word.strip()) for word in words)
         self.word_count.setText(f"{count} / 16 words")
@@ -487,6 +496,7 @@ class MainWindow(QMainWindow):
         self._awaiting_rethink = False
         self._submitted_locks.clear()
         self.demo_mode = False
+        self.random_fallback = False
         self._clear_cards()
 
     def _words_edited(self):
@@ -641,7 +651,8 @@ class MainWindow(QMainWindow):
         if self.busy or self.prepared_image is None:
             return
         self.capture_prompt.hide()
-        self._run("extract", lambda: self.service.extract(self.prepared_image))
+        service, image = self.service, self.prepared_image
+        self._run("extract", lambda: service.extract(image))
 
     def start_solve(self):
         if self.busy:
@@ -665,15 +676,16 @@ class MainWindow(QMainWindow):
             self._message("Offline example · these groups are predefined, with zero API cost.")
             return
         is_rethink = self.solution is not None
+        service = self.service
         if is_rethink:
             self._awaiting_rethink = True
             self._submitted_locks = {frozenset(group.words) for group in self.locked}
             self._render_results()
         self._run(
             "solve",
-            (lambda: self.service.solve(request, fresh=True))
+            (lambda: service.solve(request, fresh=True))
             if is_rethink
-            else (lambda: self.service.solve(request)),
+            else (lambda: service.solve(request)),
         )
 
     def _run(self, operation: str, callback):
@@ -696,18 +708,49 @@ class MainWindow(QMainWindow):
         )
         self._refresh()
         self._set_cards_enabled(False)
-        self._thread = QThread(self)
-        self._worker = Worker(callback)
-        self._worker.moveToThread(self._thread)
-        self._thread.started.connect(self._worker.run)
-        self._worker.succeeded.connect(self._succeeded)
-        self._worker.failed.connect(self._failed)
-        self._worker.finished.connect(self._thread.quit)
-        self._worker.finished.connect(self._worker.deleteLater)
-        self._thread.finished.connect(self._thread_finished)
-        self._thread.finished.connect(self._thread.deleteLater)
+        self._worker = Worker(callback, self.service)
+        self._jobs.add(self._worker)
+        self._worker.succeeded.connect(self._job_succeeded)
+        self._worker.failed.connect(self._job_failed)
+        self._worker.finished.connect(self._job_finished)
+        thread = self._worker.thread
+        self._thread = thread
         self.busy_dialog.show()
-        self._thread.start()
+        thread.start()
+
+    @Slot(object, object)
+    def _job_succeeded(self, worker, result):
+        if worker is self._worker:
+            self._succeeded(result)
+
+    @Slot(object, object)
+    def _job_failed(self, worker, error):
+        if worker is self._worker:
+            self._failed(error)
+
+    @Slot(object)
+    def _job_finished(self, worker):
+        self._jobs.discard(worker)
+        if worker is self._worker:
+            self._thread_finished()
+        worker.deleteLater()
+
+    def cancel_operation(self):
+        if not self.busy or self._worker is None:
+            return
+        operation = self._operation
+        self._worker.cancel()
+        # Retire its client/cache so another request can run independently.
+        self.service = SolverService(self.service.settings)
+        self.cost_incomplete = True
+        self._thread_finished()
+        message = "Stopped waiting. The provider may still process and bill the request."
+        if operation == "solve":
+            if self._show_random_fallback(message):
+                return
+            message += " No untried random arrangement met the saved feedback; "
+            message += "undo a confirmation or clear feedback to explore more groups."
+        self._message(message)
 
     def _add_usage(self, usage):
         if usage is None or usage.estimated_cost_usd is None:
@@ -734,6 +777,7 @@ class MainWindow(QMainWindow):
             self._message(warning or "Words read. Check spelling in all 16 tiles before solving.")
             self.word_inputs[0].setFocus()
         else:
+            self.random_fallback = False
             self._awaiting_rethink = False
             self.solution = result.value
             self._remember_attempt(self.solution)
@@ -750,14 +794,44 @@ class MainWindow(QMainWindow):
         self._add_usage(getattr(error, "usage", None))
         if getattr(error, "attempt", None) is not None:
             self._remember_attempt(error.attempt)
+        reason = str(error)
+        if self._operation == "solve":
+            if self._show_random_fallback(reason):
+                return
+            reason += " No untried random arrangement met the saved feedback; "
+            reason += "undo a confirmation or clear feedback to explore more groups."
         self._message(
             "No new answer was accepted. Confirmed groups and rejected sets are still saved. "
-            + str(error)
+            + reason
             if self._awaiting_rethink
-            else str(error)
+            else reason
         )
         if self._awaiting_rethink:
             self._render_results()
+
+    def _show_random_fallback(self, reason: str) -> bool:
+        request = SolveRequest(
+            words=[entry.text() for entry in self.word_inputs],
+            locked=self.locked,
+            rejected=self.rejected,
+            previous_attempts=self.attempt_history,
+            mode=self.mode.currentData(),
+        )
+        solution = random_solution(request)
+        if solution is None:
+            return False
+        self.solution = solution
+        self.random_fallback = True
+        self._awaiting_rethink = False
+        self._remember_attempt(solution)
+        self._render_results()
+        self.show_results()
+        self._message(
+            "Random test arrangement — not a model solution. Try a group in the game, "
+            "then mark Correct or Not correct to guide the next rethink. "
+            "The random fallback makes no API call. " + reason
+        )
+        return True
 
     @Slot()
     def _thread_finished(self):
@@ -791,6 +865,7 @@ class MainWindow(QMainWindow):
                     rejected,
                     submitted=frozenset(group.words) in self._submitted_locks,
                     theme=self.theme,
+                    random_guess=self.random_fallback and not locked,
                 )
                 card.lock_changed.connect(self.toggle_lock)
                 card.reject_changed.connect(self.toggle_rejection)
@@ -807,6 +882,8 @@ class MainWindow(QMainWindow):
             self.results_subtitle.setText(
                 "Previous suggestions cleared · confirmed groups kept · feedback saved."
                 if self._awaiting_rethink
+                else "Random test groups · no category evidence. Use game feedback to refine them."
+                if self.random_fallback
                 else "16 words, each used once. Confirm the hits. Rethink the near misses."
             )
         self._refresh()
@@ -887,6 +964,8 @@ class MainWindow(QMainWindow):
                 f"{group.title}\n{', '.join(group.words)}\n{group.explanation}"
                 for group in self.solution.groups
             )
+            if self.random_fallback:
+                text = "RANDOM TEST ARRANGEMENT — not a model solution\n\n" + text
             QApplication.clipboard().setText(text)
             self._message("Answer copied to the clipboard.")
 
@@ -904,6 +983,7 @@ class MainWindow(QMainWindow):
                     "rejected": self.rejected,
                     "previous_attempts": [attempt.model_dump() for attempt in self.attempt_history],
                     "demo": self.demo_mode,
+                    "random_fallback": self.random_fallback,
                 }
                 Path(filename).write_text(json.dumps(payload, indent=2), encoding="utf-8")
                 self._message("Suggestions exported.")

@@ -121,6 +121,7 @@ class GroupCard(QFrame):
         *,
         submitted: bool = False,
         theme: str = "light",
+        random_guess: bool = False,
     ):
         super().__init__()
         self.setObjectName("GroupCard")
@@ -133,11 +134,21 @@ class GroupCard(QFrame):
         layout.setContentsMargins(23, 18, 23, 18)
         layout.setSpacing(10)
         top = QHBoxLayout()
-        number = label(f"0{index + 1}  /  SUGGESTED GROUP", "Eyebrow")
+        number = label(
+            f"0{index + 1}  /  " + ("RANDOM TEST GROUP" if random_guess else "SUGGESTED GROUP"),
+            "Eyebrow",
+        )
         number.setStyleSheet("font-size:10px;letter-spacing:1.3px;")
         top.addWidget(number)
         top.addStretch()
-        top.addWidget(label(group.confidence.capitalize() + " confidence", "Muted"))
+        top.addWidget(
+            label(
+                "Random · unscored"
+                if random_guess
+                else group.confidence.capitalize() + " confidence",
+                "Muted",
+            )
+        )
         layout.addLayout(top)
         title = label(group.title, "CardTitle", wrap=True)
         layout.addWidget(title)
