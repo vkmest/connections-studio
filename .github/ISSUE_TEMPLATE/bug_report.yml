@@ -1,0 +1,25 @@
+name: Bug report
+description: Report a reproducible problem without sharing credentials.
+body:
+  - type: markdown
+    attributes:
+      value: "Do not include API keys, .env files, environment dumps or private screenshots. For security issues, read SECURITY.md first."
+  - type: textarea
+    id: behavior
+    attributes:
+      label: What happened?
+      description: Include the visible error and what you expected.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: Describe the actions and attach a cropped, redacted screenshot if useful.
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: OS, Python version, provider and model
+      placeholder: Windows 11, Python 3.13, Ollama, qwen3-vl:4b

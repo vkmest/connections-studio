@@ -2,12 +2,23 @@
 
 **Sixteen words. Four little epiphanies.**
 
+[![Checks](https://github.com/vkmest/connections-studio/actions/workflows/checks.yml/badge.svg)](https://github.com/vkmest/connections-studio/actions/workflows/checks.yml)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue)](https://www.python.org/downloads/)
+[![MIT license](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+
 A native Python desktop and terminal companion for Connections-style puzzles.
 Copy a screenshot, paste it into the app, check the words, and explore four likely
 groups with short explanations. No screenshot upload form, browser server or
 Tesseract setup required.
 
 ![Connections Studio workspace](docs/images/workspace.png)
+
+**Start here:** [Install](#quick-start--windows) · [Connect a provider](docs/providers-and-keys.md)
+· [Screenshot walkthrough](docs/getting-started.md) · [Terminal usage](#terminal-usage)
+· [Security](SECURITY.md)
+
+You supply your own provider key or run a local model. No shared API credentials
+are included. The predefined demo works completely offline.
 
 ## What it does
 
@@ -37,6 +48,16 @@ and not endorsed by The New York Times.
 
 Install **64-bit Python 3.11 or newer**. Open PowerShell in this project folder:
 
+Get the project first using Git:
+
+```powershell
+git clone https://github.com/vkmest/connections-studio.git
+cd connections-studio
+```
+
+Or choose **Code → Download ZIP** on GitHub, extract it, and open PowerShell in
+the extracted folder. Then install and try the free demo:
+
 ```powershell
 py -3 -m venv .venv
 .venv\Scripts\python -m pip install -e ".[desktop]"
@@ -50,6 +71,8 @@ open. Or run `.venv\Scripts\connections` / `.venv\Scripts\python -m connections`
 ### macOS / Linux
 
 ```bash
+git clone https://github.com/vkmest/connections-studio.git
+cd connections-studio
 python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install -e ".[desktop]"
@@ -352,6 +375,10 @@ See [CONTRIBUTING](CONTRIBUTING.md), [architecture](docs/architecture.md),
 [implementation plan](docs/superpowers/plans/2026-10-30-connections-studio.md).
 GitHub Actions is configured for Windows/Linux with Python 3.11/3.13. All tests
 are offline; no GitHub API-key secret is needed.
+
+The [screenshot walkthrough](docs/getting-started.md) covers the complete first run.
+For bugs, [open an issue](https://github.com/vkmest/connections-studio/issues/new/choose)
+with reproduction steps and a redacted screenshot. Never include keys or `.env` contents.
 
 Before pushing, inspect `git status` and your staged diff. Include source, tests,
 docs, examples, `pyproject.toml`, `.env.example` and the license. Exclude `.env`,

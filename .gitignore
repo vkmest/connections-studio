@@ -13,3 +13,15 @@ dist/
 *.log
 .DS_Store
 Thumbs.db
+
+# Local credentials, certificates and private exports
+.secrets/
+credentials*.json
+secrets*.json
+*.pem
+*.key
+*.p12
+*.pfx
+*.keystore
+/connections.json
+/screenshots/
