@@ -53,6 +53,11 @@ QComboBox::drop-down { border: none; width: 24px; }
 QComboBox QAbstractItemView { background: white; selection-background-color: #E4DDEF;
                             selection-color: #302241; padding: 6px; }
 QDialog { background: #F7F7F2; }
+QCheckBox { spacing: 8px; }
+QCheckBox::indicator { width: 14px; height: 14px; border-radius: 3px;
+                       border: 1px solid #AAA99F; background: white; }
+QCheckBox::indicator:checked { background: #6950A1; border: 3px solid #D7CDE9; }
+QCheckBox::indicator:disabled { background: #E9EAE4; border-color: #D4D6CE; }
 QTextEdit { background: white; border: 1px solid #DDDFD6; border-radius: 10px; padding: 8px; }
 QProgressBar { background: #E9E6EF; border: none; border-radius: 2px; max-height: 4px; }
 QProgressBar::chunk { background: #8E78B7; border-radius: 2px; }

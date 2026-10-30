@@ -3,18 +3,14 @@
 from PySide6.QtCore import QRectF, QSize, Qt, Signal
 from PySide6.QtGui import QColor, QFont, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import (
-    QDialog,
-    QDialogButtonBox,
     QFrame,
     QHBoxLayout,
     QLabel,
-    QLineEdit,
     QPushButton,
     QVBoxLayout,
     QWidget,
 )
 
-from connections.config import DEFAULT_MODEL, Settings
 from connections.gui.theme import COLORS, SOFT_COLORS
 from connections.models import Group
 
@@ -146,80 +142,3 @@ class GroupCard(QFrame):
         actions.addStretch()
         actions.addWidget(self.reject_button)
         layout.addLayout(actions)
-
-
-class SettingsDialog(QDialog):
-    def __init__(self, settings: Settings, parent=None):
-        super().__init__(parent)
-        self.setWindowTitle("Settings · Connections Studio")
-        self.setMinimumWidth(510)
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(30, 28, 30, 28)
-        layout.setSpacing(16)
-        layout.addWidget(label("Make yourself at home.", "CardTitle"))
-        layout.addWidget(
-            label(
-                "Your API key stays on this device and is sent only to OpenAI.",
-                "Subtitle",
-                wrap=True,
-            )
-        )
-        layout.addWidget(label("OPENAI API KEY", "Eyebrow"))
-        self.key_input = QLineEdit(settings.api_key)
-        self.key_input.setEchoMode(QLineEdit.EchoMode.Password)
-        self.key_input.setPlaceholderText("Paste your API key")
-        self.key_input.setAccessibleName("OpenAI API key")
-        layout.addWidget(self.key_input)
-        layout.addWidget(
-            label(
-                "Session only. To keep it across launches, set OPENAI_API_KEY in .env.",
-                "Muted",
-                wrap=True,
-            )
-        )
-        layout.addWidget(label("MODEL", "Eyebrow"))
-        self.model_input = QLineEdit(settings.model)
-        self.model_input.setAccessibleName("OpenAI model")
-        layout.addWidget(self.model_input)
-        layout.addWidget(
-            label(
-                f"Recommended: {DEFAULT_MODEL}\n"
-                "$0.75 input / $4.50 output per million tokens. Rates checked Oct 30, 2026.\n"
-                "Budget: low reasoning, 3,500 output-token limit.\n"
-                "Deeper: medium reasoning, 6,500 output-token limit.\n"
-                "Reading an image is a separate API request. Failed requests may be billed.",
-                "Muted",
-                wrap=True,
-            )
-        )
-        links = QHBoxLayout()
-        from PySide6.QtCore import QUrl
-        from PySide6.QtGui import QDesktopServices
-
-        links.addWidget(
-            button(
-                "Get an API key ↗",
-                "Ghost",
-                lambda: QDesktopServices.openUrl(QUrl("https://platform.openai.com/api-keys")),
-            )
-        )
-        links.addWidget(
-            button(
-                "Usage & billing ↗",
-                "Ghost",
-                lambda: QDesktopServices.openUrl(QUrl("https://platform.openai.com/usage")),
-            )
-        )
-        layout.addLayout(links)
-        controls = QDialogButtonBox(
-            QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel
-        )
-        controls.accepted.connect(self.accept)
-        controls.rejected.connect(self.reject)
-        layout.addWidget(controls)
-
-    def settings(self) -> Settings:
-        return Settings(
-            api_key=self.key_input.text().strip(),
-            model=self.model_input.text().strip() or DEFAULT_MODEL,
-        )

@@ -26,25 +26,39 @@ from PySide6.QtWidgets import (
 from connections.cli import parse_word_text
 from connections.config import Settings
 from connections.demo import DEMO_WORDS, demo_solution
+from connections.gui.settings_dialog import SettingsDialog
 from connections.gui.theme import STYLE
 from connections.gui.widgets import (
     CapturePreview,
     GridMark,
     GroupCard,
-    SettingsDialog,
     button,
     label,
 )
 from connections.gui.worker import Worker
 from connections.images import PreparedImage, prepare_image, read_image
 from connections.models import Group, Solution, SolveRequest, validate_words
+from connections.providers import PROVIDERS
 from connections.service import OperationResult, SolverService
 
 
 class MainWindow(QMainWindow):
     def __init__(self, service: SolverService | None = None):
         super().__init__()
-        self.service = service or SolverService(Settings.from_environment())
+        configuration_error = ""
+        if service is None:
+            try:
+                settings = Settings.from_environment()
+            except ValueError:
+                # Recovery has no credentials and cannot silently send to a fallback provider.
+                settings = Settings()
+                configuration_error = (
+                    "Could not load configuration. Check CONNECTIONS_PROVIDER and "
+                    "CONNECTIONS_MODEL in your environment/.env. Open Settings to choose a "
+                    "provider for this session. No credentials were loaded."
+                )
+            service = SolverService(settings)
+        self.service = service
         self.prepared_image: PreparedImage | None = None
         self.solution: Solution | None = None
         self.locked: list[Group] = []
@@ -63,6 +77,8 @@ class MainWindow(QMainWindow):
         self.setAcceptDrops(True)
         self._build()
         self._refresh()
+        if configuration_error:
+            self._message(configuration_error)
         QApplication.instance().installEventFilter(self)
         QShortcut(QKeySequence.StandardKey.Open, self, activated=self.open_image)
         QShortcut(QKeySequence("Ctrl+Return"), self, activated=self.start_solve)
@@ -182,7 +198,6 @@ class MainWindow(QMainWindow):
         self.open_button = button("or open an image", "Ghost", self.open_image)
         left.addWidget(self.open_button)
         self.extract_button = button("Read words from image  →", "", self.start_extract)
-        self.extract_button.setToolTip("Sends this image to OpenAI. Uses API credits.")
         left.addWidget(self.extract_button)
         self.image_note = label(
             "Capture just the 4 × 4 grid. Nothing is sent until you click Read words.",
@@ -232,7 +247,6 @@ class MainWindow(QMainWindow):
         options.addWidget(self.mode)
         right.addLayout(options)
         self.solve_button = button("Find connections  →", "Primary", self.start_solve)
-        self.solve_button.setToolTip("Sends the reviewed words to OpenAI. Uses API credits.")
         right.addWidget(self.solve_button)
         self.board_note = label("16 unique words unlock your next aha moment.", "Muted", wrap=True)
         right.addWidget(self.board_note)
@@ -344,11 +358,27 @@ class MainWindow(QMainWindow):
         self.key_status.setText(
             "Offline example"
             if self.demo_mode
-            else ("API key ready" if self.service.settings.api_key else "API key needed")
+            else (
+                "Ollama · local"
+                if self.service.settings.provider == "ollama"
+                else PROVIDERS[self.service.settings.provider].name
+                + (" · key ready" if self.service.settings.api_key else " · key needed")
+            )
         )
+        destination = PROVIDERS[self.service.settings.provider].name
+        note = (
+            "Runs on your computer. No cloud API charge."
+            if self.service.settings.provider == "ollama"
+            else f"Sends data to {destination}. Uses that provider's API credits."
+        )
+        self.extract_button.setToolTip(note)
+        self.solve_button.setToolTip(note)
+        self.retry_button.setToolTip(note)
         suffix = " + unpriced usage" if self.cost_incomplete else ""
         self.cost_label.setText(f"Session API estimate  ${self.session_cost:.4f}{suffix}")
-        self.cost_label.setToolTip("Known token usage only. Check OpenAI Usage for the final bill.")
+        self.cost_label.setToolTip(
+            "Known usage only. Check the selected provider for actual billing."
+        )
         self.feedback_note.setText(
             f"{len(self.locked)} of 4 confirmed  ·  {len(self.rejected)} rejected sets"
         )
@@ -380,7 +410,7 @@ class MainWindow(QMainWindow):
         self.preview.set_image(prepared.data)
         self.image_note.setText(
             f"{prepared.width} × {prepared.height} px · ready to read. "
-            "Read words sends this preview to OpenAI."
+            "Read words sends this preview to the selected provider."
         )
         self._message(
             "Screenshot ready. Click Read words to extract the grid, then review each tile."
@@ -658,7 +688,11 @@ class MainWindow(QMainWindow):
         if dialog.exec() == QDialog.DialogCode.Accepted:
             self.service.close()
             self.service = SolverService(dialog.settings())
-            self._message("Settings updated for this session. Your key is not saved to disk.")
+            self._message(
+                dialog.preference_warning
+                or "Provider settings updated. Keys are session-only unless you chose "
+                "OS credential storage. No keys were written to the project."
+            )
             self._refresh()
 
     def copy_answer(self):
@@ -702,8 +736,9 @@ class MainWindow(QMainWindow):
             "You can also type or paste 16 comma/newline-separated entries.\n"
             "Try an example to explore without an API key.\n\n"
             "Images and words stay in memory. Only explicit Read/Find/Rethink actions contact "
-            "OpenAI. Keys are session-only unless you set .env yourself.\n"
-            "The app requests store=false; OpenAI's service retention policies still apply.",
+            "the selected provider. Ollama runs locally without a key.\n"
+            "Settings can save keys in your OS credential store. Hosted providers' "
+            "data retention policies apply to cloud requests.",
         )
 
     def closeEvent(self, event: QCloseEvent):

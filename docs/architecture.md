@@ -17,13 +17,17 @@ flowchart LR
 | File | Responsibility |
 | --- | --- |
 | `models.py` | Normalization, board, group and partition invariants |
-| `config.py` | Explicit environment loading, model and reference token rates |
+| `config.py` | Provider selection, environment/vault/preferences precedence and reference rates |
+| `providers.py` | Supported provider defaults and pinned official destinations |
+| `credentials.py` | Explicit OS-native vault selection; no plaintext fallback |
+| `preferences.py` | Provider/model preferences only; never serializes keys |
 | `images.py` | Decode, orient, flatten, resize and strip image metadata |
-| `service.py` | OpenAI SDK, typed output, errors, bounded cache and usage |
+| `service.py` | OpenAI Responses, Kimi/DeepSeek chat, local Ollama, validation, cache and usage |
 | `cli.py` | Arguments, text/JSON, exit codes and desktop dispatch |
 | `demo.py` | Original offline sample, independent of live API behavior |
 | `gui/window.py` | Workflow, puzzle state, feedback and worker lifecycle |
-| `gui/widgets.py` | Visual components, preview and settings |
+| `gui/widgets.py` | Visual components and image preview |
+| `gui/settings_dialog.py` | Provider selection and explicit credential save/removal |
 | `gui/theme.py` | Design tokens and Qt styles |
 | `gui/worker.py` | Worker signals and exception boundary |
 
@@ -46,11 +50,22 @@ locally.
 
 ## API and usage
 
-`client.responses.parse()` uses Pydantic schemas and `store=False`. Extraction uses
+OpenAI's `client.responses.parse()` uses Pydantic schemas and `store=False`. Extraction uses
 reasoning `none` / 1,200 output tokens; budget uses `low` / 3,500; deeper uses
 `medium` / 6,500. Limits include reasoning tokens. Incomplete, refused or invalid
 output is a recoverable error. SDK retries are disabled and timeout is 90 seconds.
 A failed/timed-out request can still be billed.
+
+Kimi and DeepSeek use official Chat Completions APIs with JSON mode, a schema in
+the prompt and the same local validation. Kimi uses low/high reasoning; DeepSeek
+disables/enables thinking. Unknown provider costs remain unavailable.
+
+Ollama uses its native `/api/chat` JSON schema format. Before sending puzzle data,
+`/api/show` must describe a local GGUF model without remote metadata; image requests
+also require vision capability. The client uses only `127.0.0.1:11434`, sends no
+key, disables optional thinking, caps context at 8,192 and times out after 180
+seconds per request. All clients disable environment proxies and redirects.
+No automatic provider fallback is implemented.
 
 A service instance caches at most 24 successful typed results in memory, keyed by
 input/constraint hashes. Settings changes replace the service/cache. Cached returns
@@ -67,9 +82,12 @@ scroll vertically.
 
 ## Privacy boundary
 
-Clipboard/file reading is local. Read words sends a normalized image to OpenAI;
+Clipboard/file reading is local. Read words sends a normalized image to the chosen provider;
 Find/Rethink sends words and feedback. CLI `solve --image` asks for both requests;
 `extract` separates them for manual review. There is no game scraping or telemetry.
-Settings keys are session-only. An explicitly created `.env` is plaintext and
-Git-ignored. Service-side retention is governed by OpenAI's policies, not the
-app's in-memory design.
+Settings keys are session-only unless the user explicitly enables OS credential
+storage. Provider/model preferences contain no secret. Credentials are isolated by
+provider; no cloud key enters the Ollama settings. An explicitly created `.env` is
+plaintext and Git-ignored. Native backend selection excludes plaintext keyring
+plugins. OS storage cannot protect against a compromised OS account. Cloud-side
+retention is governed by each provider's policies, not the app's in-memory design.

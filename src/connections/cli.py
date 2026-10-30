@@ -1,15 +1,19 @@
 """Terminal interface. Desktop dependencies are imported only when launching the UI."""
 
 import argparse
+import getpass
 import json
 import re
 import sys
+import warnings
 from pathlib import Path
 
 from connections.config import Settings
+from connections.credentials import CredentialError, CredentialStore
 from connections.demo import demo_solution
 from connections.images import clipboard_image, read_image
 from connections.models import SolveRequest, Usage
+from connections.providers import PROVIDERS
 from connections.service import ServiceError, SolverService
 
 
@@ -24,6 +28,9 @@ def build_parser() -> argparse.ArgumentParser:
     commands = parser.add_subparsers(dest="command")
     gui = commands.add_parser("gui", help="Open the desktop app (default)")
     gui.add_argument("--demo", action="store_true", help="Load a free offline example")
+    auth = commands.add_parser("auth", help="Manage keys in the OS credential store")
+    auth.add_argument("action", choices=["set", "forget", "status"])
+    auth.add_argument("--provider", choices=[p for p in PROVIDERS if p != "ollama"], required=True)
     for name in ("solve", "extract"):
         command = commands.add_parser(
             name,
@@ -47,7 +54,34 @@ def build_parser() -> argparse.ArgumentParser:
             command.add_argument("--mode", choices=["budget", "deeper"], default="budget")
         command.add_argument("--json", action="store_true", help="Machine-readable output")
         command.add_argument("--model", help="Override CONNECTIONS_MODEL (advanced)")
+        command.add_argument("--provider", choices=list(PROVIDERS), help="Override saved provider")
     return parser
+
+
+def manage_key(action: str, provider: str) -> int:
+    store = CredentialStore()
+    if action == "set":
+        if not sys.stdin.isatty():
+            raise CredentialError(
+                "Use an interactive terminal for the hidden key prompt, or Settings."
+            )
+        # Refuse getpass's echoing fallback on terminals that cannot hide input.
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", getpass.GetPassWarning)
+            try:
+                key = getpass.getpass(f"{PROVIDERS[provider].name} API key (hidden): ")
+            except (getpass.GetPassWarning, EOFError):
+                raise CredentialError(
+                    "Cannot securely prompt here. Use the desktop Settings."
+                ) from None
+        store.save(provider, key)
+        print("Key saved in the OS credential store.")
+    elif action == "forget":
+        store.forget(provider)
+        print("Stored key removed. Environment/.env keys must be removed separately.")
+    else:
+        print("Saved key present." if store.get(provider) else "No key in the OS credential store.")
+    return 0
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -61,13 +95,13 @@ def main(argv: list[str] | None = None) -> int:
         return gui_main(demo=getattr(args, "demo", False))
     service = None
     try:
+        if args.command == "auth":
+            return manage_key(args.action, args.provider)
         usage_records = []
         if getattr(args, "demo", False):
             solution = demo_solution()
         else:
-            settings = Settings.from_environment()
-            if args.model:
-                settings = Settings(api_key=settings.api_key, model=args.model)
+            settings = Settings.from_environment(provider=args.provider, model=args.model)
             service = SolverService(settings)
             if args.image or args.clipboard:
                 image = read_image(args.image) if args.image else clipboard_image()
@@ -129,7 +163,7 @@ def main(argv: list[str] | None = None) -> int:
             )
             print("AI suggestions can be wrong. Confidence is not a measured probability.")
         return 0
-    except (ServiceError, ValueError, OSError) as error:
+    except (ServiceError, CredentialError, ValueError, OSError) as error:
         print("Error: " + str(error), file=sys.stderr)
         return 1
     except KeyboardInterrupt:

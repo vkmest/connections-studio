@@ -8,7 +8,7 @@ from PySide6.QtWidgets import QApplication
 
 from connections.config import Settings
 from connections.demo import DEMO_WORDS
-from connections.gui.widgets import SettingsDialog
+from connections.gui.settings_dialog import SettingsDialog
 from connections.gui.window import MainWindow
 from connections.service import SolverService
 

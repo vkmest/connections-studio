@@ -12,8 +12,10 @@ python -m ruff format --check src tests scripts
 On Windows, use `.venv\Scripts\python` if the environment isn't activated.
 For headless Linux tests, set `QT_QPA_PLATFORM=offscreen`.
 
-Tests never require an API key. API boundary tests use the real OpenAI SDK
-with an HTTP mock transport, covering serialization and parsing without charges.
+Tests never require an API key. API boundary tests use the real OpenAI SDK and
+HTTPX with mock transports, covering serialization and parsing without charges.
+The test fixture isolates provider environment variables, the launch directory,
+OS credential storage and preferences. Never let tests read/write real keys.
 Desktop tests use actual Qt widgets. Keep mocks at external boundaries and add
 a regression test for meaningful bugs.
 
@@ -24,6 +26,8 @@ into `docs/images` and regenerates the original practice puzzle.
 Keep invariants in `models.py`, networking in `service.py`, and UI state in
 `gui/window.py`. Never commit credentials, personal screenshots, `.env`, raw API
 logs or `.venv`. Comments should explain constraints or non-obvious choices.
+Provider endpoints are pinned deliberately: do not introduce arbitrary endpoints,
+plaintext credential backends, redirect following or a silent cloud fallback.
 
 For accuracy changes, evaluate on a fixed collection of puzzles you have rights
 to use. Report exact-partition success, OCR accuracy, token cost and latency.

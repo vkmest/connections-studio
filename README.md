@@ -21,6 +21,8 @@ Tesseract setup required.
 - **Control costs:** budget/deeper modes, token limits, session cost estimates,
   cached identical requests and no automatic paid retries.
 - **Try it free:** the offline example needs neither a key nor a connection.
+- **Choose your provider:** OpenAI, Kimi, DeepSeek, or free local inference with Ollama.
+- **Keep keys local:** session-only by default, with optional OS credential storage.
 - **Use your terminal:** image path, clipboard, text file, direct words or JSON output.
 
 ![Suggested groups in the offline example](docs/images/connections.png)
@@ -58,7 +60,21 @@ libraries (for example `libegl1`, `libopengl0`, `libxcb-cursor0` on Ubuntu).
 macOS/Linux native appearance and clipboard behavior should be checked on those
 platforms; local UI verification was performed on Windows.
 
-## Set up the OpenAI API
+## Providers and secure setup
+
+For a complete walkthrough, see **[providers, private keys and local models](docs/providers-and-keys.md)**.
+
+| Option | Default model | Best starting use |
+| --- | --- | --- |
+| OpenAI | `gpt-5.4-mini` | Cost-conscious hosted vision and reasoning |
+| Ollama · local | `qwen3-vl:4b` | No per-request API charge; runs on your computer |
+| Kimi / Moonshot | `kimi-k3.1-pro` | Alternative paid cloud provider |
+| DeepSeek | `deepseek-flash` | Alternative paid cloud provider |
+
+These are starting choices, not puzzle-accuracy rankings. API availability and
+prices change. Free web chat access does not imply a free API.
+
+### OpenAI
 
 1. Open the [OpenAI API dashboard](https://platform.openai.com/) and choose/create
    a project. Review its [billing settings](https://platform.openai.com/settings/organization/billing/overview)
@@ -66,26 +82,34 @@ platforms; local UI verification was performed on Windows.
    from any ChatGPT subscription or promotional credits.
 2. Create a secret key on the [API keys page](https://platform.openai.com/api-keys).
    Keep it private. The app needs permission to make Responses API requests.
-3. Open **Settings** in Connections Studio, paste the key and click **Save**.
-   This keeps it **in memory for the current session only**.
-4. For persistent setup, copy `.env.example` to `.env` in the project folder:
+3. Open **Settings → OpenAI**, paste the key and leave the default model.
+4. For this session only, leave **Remember key** unchecked. To persist it,
+   check **Remember key in the operating system credential store**. Click Save.
+   On Windows this uses Credential Manager; no key is written to the project.
 
-   ```powershell
-   Copy-Item .env.example .env
-   notepad .env
-   ```
+Terminal alternative (hidden prompt):
 
-   Set the key, save and launch from this folder:
+```powershell
+.venv\Scripts\connections auth set --provider openai
+```
 
-   ```dotenv
-   OPENAI_API_KEY=your-real-key-goes-here
-   CONNECTIONS_MODEL=gpt-5.4-mini
-   ```
+OS storage cannot protect a key from malware or someone controlling your unlocked
+account. Never put keys in source, GitHub, screenshots or issue reports. Revoke
+and replace any leaked key. An optional `.env` is still supported, but it is
+plaintext and only Git-ignored, not encrypted. Prefer the OS store.
 
-The process environment takes precedence over `.env`. Only the launch directory's
-`.env` is loaded; `launch.cmd` automatically uses this project directory.
-Never put keys in Python files, GitHub, screenshots or issue reports. `.env` is
-Git-ignored. Revoke and replace any accidentally published key.
+### Free local inference
+
+Install [Ollama](https://ollama.com/download/windows), disable its cloud features
+as described in the [local setup guide](docs/providers-and-keys.md#run-a-free-local-model-with-ollama),
+then run `ollama pull qwen3-vl:4b` (approximately 3.3 GB). Select **Ollama · local**
+in Settings and Save. No key is required. Screenshots and words are processed on
+your computer; there is no cloud fallback. Allow for model memory/runtime overhead,
+electricity use and potentially weaker wordplay accuracy. [Model details](https://ollama.com/library/qwen3-vl).
+
+For Kimi or DeepSeek, select that provider and enter its own API key. Full Kimi
+open-weight models are too large for a typical laptop; Qwen3-VL is the practical
+local starting point. Provider-specific instructions and sources are in the guide.
 
 Official references: [API quickstart](https://developers.openai.com/api/docs/quickstart),
 [API keys](https://platform.openai.com/api-keys),
@@ -98,7 +122,8 @@ Official references: [API quickstart](https://developers.openai.com/api/docs/qui
    **Control+Command+Shift+4** to capture a region to the clipboard.
 3. Press **Ctrl+V / Cmd+V** in Connections Studio or click Paste screenshot.
    The preview is local. **Pasting alone makes no API call.**
-4. Click **Read words from image**. This sends the preview to OpenAI and uses API credits.
+4. Click **Read words from image**. This sends the preview to your selected provider
+   (or local Ollama). Cloud providers use API credits.
 5. Check all 16 words and correct any misread tile. Click **Find connections** for
    a separate, text-only solve request.
 6. Try a group in the game. If accepted, click **Mark correct**. If rejected, click
@@ -123,7 +148,7 @@ leave demo mode and use the live solver.
 | Ctrl+N / Cmd+N | New puzzle |
 | Tab / Shift+Tab | Move between tiles and controls |
 
-## Model and API cost
+## OpenAI model and API cost
 
 Default: **`gpt-5.4-mini`**, selected for current vision, reasoning and structured
 output at a lower cost than a flagship model. This is a cost-conscious starting
@@ -154,7 +179,8 @@ or retry. Failed, incomplete and timed-out requests may still be billed.
 Explore the offline demo for free, enter words directly to skip extraction cost,
 and check project usage/billing controls before extended testing. The app shows
 estimates from reported usage, not invoices. Unknown usage or custom model rates
-make estimates incomplete. Check the OpenAI usage dashboard for actual charges.
+make estimates incomplete. Check the provider's usage dashboard for actual charges.
+Kimi/DeepSeek estimates are unavailable; local Ollama has zero API charges.
 
 Advanced: override `CONNECTIONS_MODEL`, CLI `--model`, or Settings. A replacement
 must support image input, structured Responses output and the configured reasoning
@@ -182,6 +208,16 @@ connections solve --image ./examples/practice-grid.png --mode deeper --json
 # Capture an image first, then read the clipboard directly
 connections solve --clipboard
 
+# Select a provider, or use the provider saved in desktop Settings
+connections solve --clipboard --provider ollama
+connections solve --image ./examples/practice-grid.png --provider kimi
+connections solve --image ./examples/practice-grid.png --provider deepseek
+
+# Store/remove keys without putting secrets in command history
+connections auth set --provider openai
+connections auth status --provider openai
+connections auth forget --provider openai
+
 # Extract, review/correct the file, then solve text only
 connections extract --image ./examples/practice-grid.png > words.txt
 connections solve --words-file words.txt
@@ -200,7 +236,8 @@ to the program. Clipboard support is most reliable on Windows/macOS; Linux depen
 on the desktop and Pillow clipboard helpers. Use `--image` when unavailable.
 
 `solve --image` and `solve --clipboard` explicitly perform **extraction plus solving**
-(normally two paid requests). Use `extract` then `--words-file` for manual review.
+(normally two model requests; paid for cloud providers). Use `extract` then
+`--words-file` for manual review.
 Text files are UTF-8, one tile per line. On Windows PowerShell 5.1, use
 `connections extract ... | Set-Content -Encoding utf8 words.txt` instead of `>`
 (which writes UTF-16 there).
@@ -213,9 +250,12 @@ CLI feedback editing is not implemented; use the desktop to lock/reject groups.
 
 - Clipboard previews, puzzles and caches remain in memory. No screenshot history
   or telemetry. JSON export and answer copying happen only when requested.
-- Explicit Read/Find/Rethink actions send input to OpenAI. Requests use `store=False`,
-  which is not a zero-retention guarantee. See
+- Explicit Read/Find/Rethink actions send input to the selected cloud provider or
+  local Ollama. OpenAI requests use `store=False`, which is not a zero-retention guarantee. See
   [OpenAI data controls](https://developers.openai.com/api/docs/guides/your-data).
+- Keys are separate per provider; optional persistence uses the native OS store.
+  Local mode receives no cloud credentials. See the
+  [security boundaries](docs/providers-and-keys.md#keep-keys-out-of-the-repository).
 - Images are oriented, flattened to RGB, resized to a maximum 1600px longest side,
   and re-encoded without metadata. Limits: 12 MB, 25 megapixels, minimum 64px per
   side. PNG/JPEG/WebP/BMP are supported.
@@ -233,7 +273,9 @@ CLI feedback editing is not implemented; use the desktop to lock/reject groups.
 | Token budget exhausted | Try Deeper; review spelling and feedback first. |
 | Wrong/missing words | Crop a sharper grid or edit tiles manually. |
 | Clipboard has no image | Capture to clipboard or use Open image. |
-| Window won't close yet | A request is running (90-second timeout); let it finish. |
+| Window won't close yet | A request is running (90-second cloud / 180-second local timeout); let it finish. |
+| Cannot reach Ollama | Start Ollama; run `ollama pull qwen3-vl:4b`; check the selected model. |
+| OS credential store locked | Unlock the keychain, or leave Remember unchecked for a session-only key. |
 | Desktop support missing | Run `python -m pip install -e ".[desktop]"`. |
 | Module not found | Install from this project folder with the same Python. |
 

@@ -126,3 +126,18 @@ def test_close_is_deferred_while_request_runs(qtbot, monkeypatch):
         release.set()
         qtbot.waitUntil(lambda: not widget.busy, timeout=5000)
     assert widget.close()
+
+
+def test_invalid_environment_opens_recovery_ui_without_loading_credentials(qtbot, monkeypatch):
+    from connections.config import Settings
+    from connections.gui.window import MainWindow
+
+    def invalid():
+        raise ValueError("Unknown CONNECTIONS_PROVIDER. Use openai, kimi, deepseek or ollama.")
+
+    monkeypatch.setattr(Settings, "from_environment", invalid)
+    window = MainWindow()
+    qtbot.addWidget(window)
+    assert window.service.settings.api_key == ""
+    assert "CONNECTIONS_PROVIDER" in window.message_label.text()
+    assert "Settings" in window.message_label.text()

@@ -1,4 +1,4 @@
-"""The only network boundary: typed Responses API calls with local validation."""
+"""Provider network boundary, schema validation, usage and bounded result caching."""
 
 import hashlib
 import json
@@ -6,6 +6,7 @@ from collections import OrderedDict
 from dataclasses import dataclass
 from typing import Generic, TypeVar
 
+import httpx
 from openai import (
     APIConnectionError,
     APIStatusError,
@@ -20,6 +21,7 @@ from pydantic import BaseModel, ValidationError
 from connections.config import MODEL_RATES, Settings
 from connections.images import PreparedImage
 from connections.models import Extraction, Solution, SolveRequest, Usage
+from connections.providers import PROVIDERS
 
 T = TypeVar("T", bound=BaseModel)
 
@@ -58,22 +60,33 @@ class OperationResult(Generic[T]):
 
 
 class SolverService:
-    def __init__(self, settings: Settings, client: OpenAI | None = None):
+    def __init__(
+        self,
+        settings: Settings,
+        client: OpenAI | None = None,
+        local_client: httpx.Client | None = None,
+    ):
         self.settings = settings
         self._client = client
+        self._local_client = local_client
         self._cache: OrderedDict[str, BaseModel] = OrderedDict()
 
     def close(self) -> None:
         if self._client is not None:
             self._client.close()
+        if self._local_client is not None:
+            self._local_client.close()
 
     def _get_client(self) -> OpenAI:
         if self._client is None:
             if not self.settings.api_key:
-                raise ServiceError("Add an OpenAI API key in Settings or OPENAI_API_KEY in .env.")
+                raise ServiceError(
+                    "Add this provider's API key in Settings or its environment variable."
+                )
             self._client = OpenAI(
                 api_key=self.settings.api_key,
-                base_url="https://api.openai.com/v1",
+                base_url=PROVIDERS[self.settings.provider].base_url,
+                http_client=httpx.Client(trust_env=False, follow_redirects=False),
                 timeout=90.0,
                 max_retries=0,
             )
@@ -168,7 +181,14 @@ class SolverService:
     def _request(
         self, schema: type[T], instructions: str, content, *, effort: str, max_tokens: int
     ) -> OperationResult[T]:
+        provider_name = PROVIDERS[self.settings.provider].name
         try:
+            if self.settings.provider == "ollama":
+                return self._request_local(schema, instructions, content, max_tokens=max_tokens)
+            if self.settings.provider != "openai":
+                return self._request_chat(
+                    schema, instructions, content, effort=effort, max_tokens=max_tokens
+                )
             response = self._get_client().responses.parse(
                 model=self.settings.model,
                 instructions=instructions,
@@ -178,36 +198,37 @@ class SolverService:
                 max_output_tokens=max_tokens,
                 store=False,
             )
-        except AuthenticationError as error:
-            raise ServiceError("The API key was rejected. Check your key in Settings.") from error
+        except AuthenticationError:
+            raise ServiceError("The API key was rejected. Check your key in Settings.") from None
         except RateLimitError as error:
             if error.code == "insufficient_quota":
                 raise ServiceError(
                     "API billing quota is exhausted. Check credits and billing limits."
-                ) from error
-            raise ServiceError("OpenAI rate limit reached. Wait a moment and try again.") from error
-        except APITimeoutError as error:
+                ) from None
+            raise ServiceError(f"{provider_name} rate limit reached. Wait and try again.") from None
+        except APITimeoutError:
             raise ServiceError(
-                "OpenAI timed out. Try again when ready; the request may be billed."
-            ) from error
-        except APIConnectionError as error:
+                f"{provider_name} timed out. Try again when ready; the request may be billed."
+            ) from None
+        except APIConnectionError:
             raise ServiceError(
-                "Cannot connect to OpenAI. Check your internet connection."
-            ) from error
-        except BadRequestError as error:
+                f"Cannot connect to {provider_name}. Check your internet connection."
+            ) from None
+        except BadRequestError:
             raise ServiceError(
-                "OpenAI rejected the request. Check model access and use a supported "
+                f"{provider_name} rejected the request. Check model access and use a supported "
                 "vision/structured-output model in Settings."
-            ) from error
+            ) from None
         except APIStatusError as error:
             raise ServiceError(
-                f"OpenAI returned HTTP {error.status_code}. Check model access or try again later."
-            ) from error
-        except (ValidationError, ValueError) as error:
+                f"{provider_name} returned HTTP {error.status_code}. "
+                "Check model access or try again."
+            ) from None
+        except (ValidationError, ValueError):
             raise ServiceError(
-                "OpenAI did not return valid structured output. Review the words or "
-                "try deeper mode. This request may still be billed."
-            ) from error
+                f"{provider_name} did not return valid structured output. Review the words or "
+                "try deeper mode. Cloud requests may still be billed."
+            ) from None
         usage = self._usage(response)
         if response.status == "incomplete":
             raise ServiceError(
@@ -222,3 +243,137 @@ class SolverService:
                 usage,
             )
         return OperationResult(response.output_parsed, usage)
+
+    def _request_chat(self, schema, instructions, content, *, effort, max_tokens):
+        if isinstance(content, list):
+            content = [
+                {"type": "text", "text": part["text"]}
+                if part["type"] == "input_text"
+                else {"type": "image_url", "image_url": {"url": part["image_url"]}}
+                for part in content
+            ]
+        options = {}
+        if self.settings.provider == "kimi":
+            options["reasoning_effort"] = "high" if effort == "medium" else "low"
+        else:
+            options["extra_body"] = {
+                "thinking": {"type": "enabled" if effort == "medium" else "disabled"}
+            }
+            if effort == "medium":
+                options["reasoning_effort"] = "high"
+        response = self._get_client().chat.completions.create(
+            model=self.settings.model,
+            messages=[
+                {
+                    "role": "system",
+                    "content": instructions + "\nReturn only JSON matching "
+                    "this schema: " + json.dumps(schema.model_json_schema()),
+                },
+                {"role": "user", "content": content},
+            ],
+            response_format={"type": "json_object"},
+            max_tokens=max_tokens,
+            **options,
+        )
+        raw_usage = response.usage
+        usage = Usage(
+            input_tokens=raw_usage.prompt_tokens if raw_usage else 0,
+            output_tokens=raw_usage.completion_tokens if raw_usage else 0,
+            estimated_cost_usd=None,
+        )
+        if not response.choices:
+            raise ServiceError("The provider returned no answer.", usage)
+        choice = response.choices[0]
+        if choice.finish_reason == "length":
+            raise ServiceError("The answer reached its token budget. Try deeper mode.", usage)
+        if choice.finish_reason != "stop" or choice.message.refusal:
+            raise ServiceError("The provider declined or did not finish the answer.", usage)
+        try:
+            value = schema.model_validate_json(choice.message.content or "")
+        except ValueError:
+            raise ServiceError(
+                "The provider did not return valid JSON for this puzzle.", usage
+            ) from None
+        return OperationResult(value, usage)
+
+    def _request_local(self, schema, instructions, content, *, max_tokens):
+        if self._local_client is None:
+            self._local_client = httpx.Client(
+                timeout=180.0, trust_env=False, follow_redirects=False
+            )
+        base = PROVIDERS["ollama"].base_url
+        model = self.settings.model
+        try:
+            # Check before sending puzzle data, including aliases with innocent-looking names.
+            info_response = self._local_client.post(base + "/api/show", json={"model": model})
+            info_response.raise_for_status()
+            info = info_response.json()
+            if (
+                info.get("remote_host")
+                or info.get("remote_model")
+                or info.get("details", {}).get("format") != "gguf"
+            ):
+                raise ServiceError(
+                    "Choose an installed local GGUF model, not an Ollama cloud model."
+                )
+            user_message = {"role": "user", "content": content}
+            if isinstance(content, list):
+                if "vision" not in info.get("capabilities", []):
+                    raise ServiceError(
+                        "This local model cannot read images. Use qwen3-vl:4b "
+                        "or enter the words manually."
+                    )
+                user_message = {
+                    "role": "user",
+                    "content": "Read the puzzle grid.",
+                    "images": [
+                        part["image_url"].split(",", 1)[1]
+                        for part in content
+                        if part["type"] == "input_image"
+                    ],
+                }
+            body = {
+                "model": model,
+                "stream": False,
+                "format": schema.model_json_schema(),
+                "messages": [
+                    {
+                        "role": "system",
+                        "content": instructions
+                        + "\nJSON schema: "
+                        + json.dumps(schema.model_json_schema()),
+                    },
+                    user_message,
+                ],
+                "options": {"num_ctx": 8192, "num_predict": max_tokens},
+            }
+            if "thinking" in info.get("capabilities", []):
+                body["think"] = False
+            response = self._local_client.post(base + "/api/chat", json=body)
+            response.raise_for_status()
+            result = response.json()
+            if result.get("done") is not True or result.get("done_reason") == "length":
+                raise ServiceError("Local model reached its token budget or did not finish.")
+            value = schema.model_validate_json(result.get("message", {}).get("content", ""))
+            return OperationResult(
+                value,
+                Usage(
+                    input_tokens=result.get("prompt_eval_count", 0),
+                    output_tokens=result.get("eval_count", 0),
+                ),
+            )
+        except httpx.HTTPStatusError as error:
+            if error.response.status_code == 404:
+                raise ServiceError(
+                    "Ollama model not found. Install it with: ollama pull " + model
+                ) from None
+            raise ServiceError(
+                "Ollama rejected the request. Check its version and model support."
+            ) from None
+        except httpx.RequestError:
+            raise ServiceError(
+                "Cannot reach local Ollama, or it timed out. Start Ollama and "
+                "install the selected model. No cloud fallback was made."
+            ) from None
+        except (ValueError, TypeError, AttributeError):
+            raise ServiceError("Local Ollama did not return valid structured output.") from None

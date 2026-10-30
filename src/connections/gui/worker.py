@@ -1,4 +1,4 @@
-"""Run a single paid operation off the UI thread; the window owns its lifecycle."""
+"""Run one model operation off the UI thread; the window owns its lifecycle."""
 
 from PySide6.QtCore import QObject, Signal, Slot
 
