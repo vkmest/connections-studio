@@ -551,6 +551,7 @@ class MainWindow(QMainWindow):
                         "cloud API charges apply."
                     )
                 )
+                self._message("")
                 self.capture_prompt.show()
                 self.capture_prompt.read_button.setFocus()
             elif clipboard.text().strip():

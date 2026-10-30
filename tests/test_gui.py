@@ -48,6 +48,7 @@ def test_paste_image_previews_without_api_call(qtbot):
     assert widget.extract_button.isEnabled()
     assert widget.capture_prompt.isVisible()
     assert widget.capture_prompt.read_button.isDefault()
+    assert not widget.message_label.isVisible()
 
 
 def test_paste_words_preserves_phrases(qtbot):
